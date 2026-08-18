@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── FUENTES ──────────────────────────────────────────────────── */
+@layer base {
+  :root {
+    --font-display: 'Clash Display', 'Cabinet Grotesk', sans-serif;
+    --font-body:    'Plus Jakarta Sans', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+  }
+
+  html {
+    @apply scroll-smooth;
+    /* Dark mode es el modo principal de Break */
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-negro-absoluto text-blanco-roto antialiased;
+    font-family: var(--font-body);
+  }
+
+  /* Selección de texto con dorado */
+  ::selection {
+    @apply bg-dorado text-negro-absoluto;
+  }
+
+  /* Scrollbar personalizada */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-negro-profundo;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gris-carbon rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-dorado;
+  }
+}
+
+/* ── COMPONENTES REUTILIZABLES ────────────────────────────────── */
+@layer components {
+  /* Superficie glassmorphism */
+  .glass {
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(201, 168, 76, 0.15);
+  }
+
+  .glass:hover {
+    border-color: rgba(201, 168, 76, 0.30);
+  }
+
+  /* Shimmer de carga — nunca spinners genéricos */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(61, 61, 61, 0.4) 25%,
+      rgba(61, 61, 61, 0.8) 50%,
+      rgba(61, 61, 61, 0.4) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  /* Grain texture sutil para fondos hero */
+  .grain::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* Badge de estado — habitaciones del dashboard */
+  .badge-disponible    { @apply bg-estado-disponible/20 text-green-300 border border-estado-disponible/40; }
+  .badge-ocupada       { @apply bg-estado-ocupada/20 text-red-300 border border-estado-ocupada/40; }
+  .badge-aseo          { @apply bg-estado-aseo/20 text-amber-300 border border-estado-aseo/40; }
+  .badge-mantenimiento { @apply bg-estado-mantenimiento/20 text-gray-300 border border-estado-mantenimiento/40; }
+}
+
+/* ── UTILIDADES ───────────────────────────────────────────────── */
+@layer utilities {
+  /* Texto con gradiente dorado */
+  .text-dorado-gradient {
+    background: linear-gradient(135deg, #c9a84c 0%, #f0d090 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Borde dorado animado al focus */
+  .focus-dorado {
+    @apply outline-none ring-2 ring-dorado/30 border-dorado/60;
+  }
+}
+
+/* ── HERO BANNER ANIMATIONS ──────────────────────────────────── */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes text-glow {
+  0%, 100% { text-shadow: 0 0 8px rgba(201,169,110,0.15), 0 0 32px rgba(201,169,110,0); }
+  50%      { text-shadow: 0 0 16px rgba(201,169,110,0.4), 0 0 48px rgba(201,169,110,0.12); }
+}
+
+@keyframes text-glow-strong {
+  0%, 100% { text-shadow: 0 0 10px rgba(201,169,110,0.2), 0 0 40px rgba(201,169,110,0.05); }
+  50%      { text-shadow: 0 0 24px rgba(201,169,110,0.6), 0 0 64px rgba(201,169,110,0.15); }
+}
+
+@keyframes line-expand {
+  0%   { width: 0; opacity: 0; }
+  100% { width: 80px; opacity: 1; }
+}
+
+@keyframes hero-zoom {
+  0%   { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes float-light {
+  0%, 100% { opacity: 0.04; transform: translateY(0) scale(1); }
+  50%      { opacity: 0.08; transform: translateY(-20px) scale(1.1); }
+}
+
+.animate-text-glow {
+  animation: text-glow 4s ease-in-out infinite;
+}
+
+.animate-text-glow-strong {
+  animation: text-glow-strong 3s ease-in-out infinite;
+}
+
+.animate-line-expand {
+  animation: line-expand 1.2s ease-out forwards;
+}
+
+.animate-hero-zoom {
+  animation: hero-zoom 12s ease-out forwards;
+}
+
+.animate-float-light {
+  animation: float-light 8s ease-in-out infinite;
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    110deg,
+    rgba(201,169,110,0.7) 0%,
+    rgba(240,208,144,1) 35%,
+    rgba(201,169,110,0.7) 50%,
+    rgba(240,208,144,1) 65%,
+    rgba(201,169,110,0.7) 100%
+  );
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 6s linear infinite;
+}
+
+/* ── ANIMACIONES DE SCROLL (Aura.js) ─────────────────────────── */
+[data-aura] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 400ms ease-out, transform 400ms ease-out;
+}
+
+[data-aura].aura-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+[data-aura="fade"]              { opacity: 0; transform: none; }
+[data-aura="fade"].aura-visible { opacity: 1; }
+
+/* Delays escalonados para grids */
+[data-aura][data-aura-delay="1"] { transition-delay: 50ms; }
+[data-aura][data-aura-delay="2"] { transition-delay: 100ms; }
+[data-aura][data-aura-delay="3"] { transition-delay: 150ms; }
+[data-aura][data-aura-delay="4"] { transition-delay: 200ms; }
+[data-aura][data-aura-delay="5"] { transition-delay: 250ms; }
+[data-aura][data-aura-delay="6"] { transition-delay: 300ms; }
+
+/* ── RESPETAR PREFERENCIA DE MOVIMIENTO REDUCIDO ─────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-aura] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}

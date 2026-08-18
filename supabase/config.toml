@@ -1,0 +1,77 @@
+# Configuración de Supabase CLI — Break Hotel
+# Documentación: https://supabase.com/docs/reference/cli/config
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://breakmanizales.com"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+inspector_port = 8083
+
+# whatsapp-webhook es pública: Meta la llama sin JWT nuestro
+[functions.whatsapp-webhook]
+verify_jwt = false
+
+# send-email requiere JWT (solo llamada interna desde la app o desde otras Edge Functions)
+[functions.send-email]
+verify_jwt = true
+
+# admin-users requiere JWT (solo gerente puede gestionar usuarios)
+[functions.admin-users]
+verify_jwt = true
+
+# send-campaign requiere JWT (llamada desde el panel admin Marketing)
+[functions.send-campaign]
+verify_jwt = true
+
+# send-whatsapp requiere JWT (llamada desde el panel admin Marketing)
+[functions.send-whatsapp]
+verify_jwt = true
+
+# pxsol-auth / pxsol-sync: invocación interna o cron con service_role
+[functions.pxsol-auth]
+verify_jwt = true
+
+[functions.pxsol-sync]
+verify_jwt = true
+
+# Reservada: PxSol no documenta webhooks salientes hoy.
+# Si se activa, llegaría sin JWT de Supabase (firma HMAC propia).
+[functions.pxsol-webhook]
+verify_jwt = false
+
+[functions.siigo-auth]
+verify_jwt = true
+
+[functions.siigo-sync-factura]
+verify_jwt = true
