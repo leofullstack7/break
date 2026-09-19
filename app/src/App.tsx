@@ -5,32 +5,33 @@ import { RouteGuard } from '@/components/auth/RouteGuard'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { PageLoader } from '@/components/ui/PageLoader'
 
-// ── PÚBLICAS ──────────────────────────────────────────────────
+const Login = lazy(() => import('@/pages/auth/Login'))
+
+// ── ADMIN ─────────────────────────────────────────────────────
+const Dashboard  = lazy(() => import('@/pages/admin/Dashboard'))
+const Reservas   = lazy(() => import('@/pages/admin/Reservas'))
+const Huespedes  = lazy(() => import('@/pages/admin/Huespedes'))
+const HuespedDet = lazy(() => import('@/pages/admin/HuespedDetalle'))
+const Aseo       = lazy(() => import('@/pages/admin/Aseo'))
+const Lavanderia = lazy(() => import('@/pages/admin/Lavanderia'))
+const Finanzas   = lazy(() => import('@/pages/admin/Finanzas'))
+const Marketing  = lazy(() => import('@/pages/admin/Marketing'))
+const Usuarios   = lazy(() => import('@/pages/admin/Usuarios'))
+const Claves     = lazy(() => import('@/pages/admin/Claves'))
+const Conversaciones = lazy(() => import('@/pages/admin/Conversaciones'))
+
+// ── ARCHIVO: sitio público + portal huésped (apartados, no son la entrada) ──
 const Landing      = lazy(() => import('@/pages/public/Landing'))
 const Habitaciones = lazy(() => import('@/pages/public/Habitaciones'))
 const Reservar     = lazy(() => import('@/pages/public/Reservar'))
 const Nosotros     = lazy(() => import('@/pages/public/Nosotros'))
 const Ubicacion    = lazy(() => import('@/pages/public/Ubicacion'))
-const Login        = lazy(() => import('@/pages/auth/Login'))
-
-// ── ADMIN ─────────────────────────────────────────────────────
-const Dashboard   = lazy(() => import('@/pages/admin/Dashboard'))
-const Reservas    = lazy(() => import('@/pages/admin/Reservas'))
-const Huespedes   = lazy(() => import('@/pages/admin/Huespedes'))
-const HuespedDet  = lazy(() => import('@/pages/admin/HuespedDetalle'))
-const Aseo        = lazy(() => import('@/pages/admin/Aseo'))
-const Lavanderia  = lazy(() => import('@/pages/admin/Lavanderia'))
-const Finanzas    = lazy(() => import('@/pages/admin/Finanzas'))
-const Marketing   = lazy(() => import('@/pages/admin/Marketing'))
-const Usuarios    = lazy(() => import('@/pages/admin/Usuarios'))
-
-// ── HUÉSPED ───────────────────────────────────────────────────
 const HuespedPortal  = lazy(() => import('@/pages/huesped/Portal'))
 const HuespedReserva = lazy(() => import('@/pages/huesped/MiReserva'))
+const ChatHabitacion = lazy(() => import('@/pages/public/ChatHabitacion'))
 
-// Helper: envuelve una ruta admin con guard + layout
 function AdminRoute({ roles, children }: {
-  roles: ('gerente' | 'recepcion' | 'aseo' | 'marketing' | 'huesped')[]
+  roles: ('gerente' | 'recepcion' | 'aseo' | 'marketing')[]
   children: React.ReactNode
 }) {
   return (
@@ -48,42 +49,38 @@ export default function App() {
       <Suspense fallback={<PageLoader />}>
         <Routes location={location} key={location.pathname}>
 
-          {/* ── RUTAS PÚBLICAS ── */}
-          <Route path="/"             element={<Landing />} />
-          <Route path="/habitaciones" element={<Habitaciones />} />
-          <Route path="/reservar"     element={<Reservar />} />
-          <Route path="/nosotros"     element={<Nosotros />} />
-          <Route path="/ubicacion"    element={<Ubicacion />} />
-          <Route path="/login"        element={<Login />} />
+          {/* Entrada: login administrativo */}
+          <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Navigate to="/" replace />} />
 
-          {/* ── PANEL ADMIN ── */}
+          {/* Panel admin */}
           <Route path="/admin" element={
-            <AdminRoute roles={['gerente','recepcion','aseo','marketing']}>
+            <AdminRoute roles={['gerente', 'recepcion', 'aseo', 'marketing']}>
               <Dashboard />
             </AdminRoute>
           } />
           <Route path="/admin/reservas" element={
-            <AdminRoute roles={['gerente','recepcion']}>
+            <AdminRoute roles={['gerente', 'recepcion']}>
               <Reservas />
             </AdminRoute>
           } />
           <Route path="/admin/huespedes" element={
-            <AdminRoute roles={['gerente','recepcion','marketing']}>
+            <AdminRoute roles={['gerente', 'recepcion', 'marketing']}>
               <Huespedes />
             </AdminRoute>
           } />
           <Route path="/admin/huespedes/:id" element={
-            <AdminRoute roles={['gerente','recepcion','marketing']}>
+            <AdminRoute roles={['gerente', 'recepcion', 'marketing']}>
               <HuespedDet />
             </AdminRoute>
           } />
           <Route path="/admin/aseo" element={
-            <AdminRoute roles={['gerente','aseo','recepcion']}>
+            <AdminRoute roles={['gerente', 'aseo', 'recepcion']}>
               <Aseo />
             </AdminRoute>
           } />
           <Route path="/admin/lavanderia" element={
-            <AdminRoute roles={['gerente','aseo']}>
+            <AdminRoute roles={['gerente', 'aseo']}>
               <Lavanderia />
             </AdminRoute>
           } />
@@ -93,7 +90,7 @@ export default function App() {
             </AdminRoute>
           } />
           <Route path="/admin/marketing" element={
-            <AdminRoute roles={['gerente','marketing']}>
+            <AdminRoute roles={['gerente', 'marketing']}>
               <Marketing />
             </AdminRoute>
           } />
@@ -102,14 +99,32 @@ export default function App() {
               <Usuarios />
             </AdminRoute>
           } />
+          <Route path="/admin/claves" element={
+            <AdminRoute roles={['gerente', 'recepcion']}>
+              <Claves />
+            </AdminRoute>
+          } />
+          <Route path="/admin/conversaciones" element={
+            <AdminRoute roles={['gerente', 'recepcion']}>
+              <Conversaciones />
+            </AdminRoute>
+          } />
 
-          {/* ── PORTAL HUÉSPED ── */}
-          <Route path="/huesped" element={
+          {/* Chat huésped por QR — público, sin login */}
+          <Route path="/h/:token" element={<ChatHabitacion />} />
+
+          {/* Sitio público y portal huésped — conservados bajo /sitio */}
+          <Route path="/sitio" element={<Landing />} />
+          <Route path="/sitio/habitaciones" element={<Habitaciones />} />
+          <Route path="/sitio/reservar" element={<Reservar />} />
+          <Route path="/sitio/nosotros" element={<Nosotros />} />
+          <Route path="/sitio/ubicacion" element={<Ubicacion />} />
+          <Route path="/sitio/huesped" element={
             <RouteGuard roles={['huesped']}>
               <HuespedPortal />
             </RouteGuard>
           } />
-          <Route path="/huesped/mi-reserva" element={
+          <Route path="/sitio/huesped/mi-reserva" element={
             <RouteGuard roles={['huesped']}>
               <HuespedReserva />
             </RouteGuard>

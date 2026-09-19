@@ -13,15 +13,15 @@ export function RouteGuard({ children, roles }: RouteGuardProps) {
   const location = useLocation()
   const { user, rol, inicializado } = useAuthStore()
 
-  // Esperar a que el store inicialice (lectura de sesión)
   if (!inicializado) return <PageLoader />
 
-  // Sin sesión → login
-  if (!user) return <Navigate to="/login" state={{ from: location }} replace />
+  if (!user) {
+    return <Navigate to="/" state={{ from: location }} replace />
+  }
 
-  // Con sesión pero sin rol válido para esta ruta → redirigir según rol
   if (!rol || !roles.includes(rol)) {
-    const destino = rol === 'huesped' ? '/huesped' : rol ? '/admin' : '/'
+    // Staff sin permiso → dashboard; huésped → login admin
+    const destino = rol && rol !== 'huesped' ? '/admin' : '/'
     return <Navigate to={destino} replace />
   }
 

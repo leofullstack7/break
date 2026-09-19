@@ -133,7 +133,7 @@ export default function HuespedDetalle() {
         </div>
         <div className="glass rounded-xl p-3 text-center">
           <p className="font-mono text-mono-sm font-bold text-blanco-roto">
-            {totalGastado > 0 ? `$${(totalGastado / 1_000_000).toFixed(1)}M` : '—'}
+            {totalGastado > 0 ? formatMonto(totalGastado) : '—'}
           </p>
           <p className="text-body-xs text-blanco-roto/40 mt-1">Gastado</p>
         </div>

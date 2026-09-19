@@ -13,6 +13,8 @@ export type EstadoHospedaje =
   | 'reserva_futura'
   | 'hospedado'           // todavía está en el hotel
   | 'checkout_pendiente'  // la fecha pasó y aún no se registra la salida
+  | 'bloqueada'           // fuera de venta / bloqueo PxSol (estado_habitacion=mantenimiento)
+  | 'aseo'
 
 export type TipoAseo = 'salida' | 'mantenimiento' | 'diario'
 export type EstadoAseo = 'pendiente' | 'en_proceso' | 'completado'
@@ -28,8 +30,41 @@ export interface Habitacion {
   capacidad: number
   estado: EstadoHabitacion
   precio_base: number
+  chat_token: string | null
   created_at: string
   updated_at: string
+}
+
+export type ChatMensajeTipo = 'texto' | 'imagen' | 'audio'
+export type ChatMensajeRol = 'huesped' | 'admin' | 'bot' | 'sistema'
+
+export interface Chat {
+  id: string
+  habitacion_id: string | null
+  reserva_id: string | null
+  huesped_id: string | null
+  titulo: string | null
+  estado: 'abierto' | 'cerrado' | 'bot_activo'
+  bot_activo: boolean
+  ultimo_mensaje_at: string | null
+  ultimo_mensaje: string | null
+  ultimo_rol: ChatMensajeRol | null
+  no_leidos_admin: number
+  no_leidos_huesped: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ChatMensaje {
+  id: string
+  chat_id: string
+  rol: ChatMensajeRol
+  autor_id: string | null
+  contenido: string
+  tipo: ChatMensajeTipo
+  media_path: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
 }
 
 export interface Huesped {
@@ -79,6 +114,15 @@ export interface Reserva {
   pxsol_booking_id: string | null
   pxsol_raw: Record<string, unknown> | null
   pxsol_sync_at: string | null
+  siigo_estado: string | null
+  siigo_factura_id: string | null
+  siigo_numero: string | null
+  siigo_cufe: string | null
+  siigo_pdf_url: string | null
+  siigo_error: string | null
+  siigo_sync_at: string | null
+  siigo_autorizado_por: string | null
+  siigo_autorizado_at: string | null
 }
 
 export interface Aseo {
@@ -234,6 +278,36 @@ export interface SyncLog {
   created_at: string
 }
 
+export type PxsolWriteTipo =
+  | 'editar_huesped'
+  | 'agregar_acompanante'
+  | 'check_in'
+  | 'check_out'
+  | 'actualizar_reserva'
+
+export type PxsolWriteEstado =
+  | 'pendiente_aprobacion'
+  | 'aprobado'
+  | 'rechazado'
+  | 'enviado'
+  | 'error'
+
+export interface PxsolWriteQueueItem {
+  id: number
+  tipo: PxsolWriteTipo
+  booking_id: string | null
+  reserva_id: string | null
+  payload: Record<string, unknown>
+  estado: PxsolWriteEstado
+  solicitado_por: string | null
+  aprobado_por: string | null
+  aprobado_at: string | null
+  pxsol_response: Record<string, unknown> | null
+  error: string | null
+  created_at: string
+  sent_at: string | null
+}
+
 // ── TIPO DATABASE PARA SUPABASE CLIENT ──────────────────────────
 
 export interface Database {
@@ -241,7 +315,7 @@ export interface Database {
     Tables: {
       habitaciones: {
         Row: Habitacion
-        Insert: Omit<Habitacion, 'id' | 'created_at' | 'updated_at'>
+        Insert: Omit<Habitacion, 'id' | 'created_at' | 'updated_at' | 'chat_token'> & { chat_token?: string | null }
         Update: Partial<Omit<Habitacion, 'id' | 'created_at' | 'updated_at'>>
       }
       huespedes: {
@@ -299,6 +373,21 @@ export interface Database {
         Insert: Omit<SyncLog, 'id' | 'created_at'>
         Update: Partial<Omit<SyncLog, 'id' | 'created_at'>>
       }
+      pxsol_write_queue: {
+        Row: PxsolWriteQueueItem
+        Insert: Omit<PxsolWriteQueueItem, 'id' | 'created_at' | 'sent_at' | 'aprobado_at' | 'pxsol_response' | 'error'>
+        Update: Partial<Omit<PxsolWriteQueueItem, 'id' | 'created_at'>>
+      }
+      chats: {
+        Row: Chat
+        Insert: Omit<Chat, 'id' | 'created_at' | 'updated_at' | 'no_leidos_admin' | 'no_leidos_huesped'>
+        Update: Partial<Omit<Chat, 'id' | 'created_at'>>
+      }
+      chat_mensajes: {
+        Row: ChatMensaje
+        Insert: Omit<ChatMensaje, 'id' | 'created_at'>
+        Update: Partial<Omit<ChatMensaje, 'id' | 'created_at'>>
+      }
     }
     Views: {
       v_mapa_habitaciones: { Row: MapaHabitacion }
@@ -314,6 +403,13 @@ export interface Database {
         Returns: boolean
       }
       get_mi_rol: { Args: Record<never, never>; Returns: string }
+      chat_habitacion_por_token: { Args: { p_token: string }; Returns: Record<string, unknown> }
+      chat_enviar_huesped: {
+        Args: { p_token: string; p_tipo: string; p_contenido: string; p_media_path?: string | null }
+        Returns: Record<string, unknown>
+      }
+      chat_marcar_leido_huesped: { Args: { p_token: string }; Returns: undefined }
+      chat_marcar_leido_admin: { Args: { p_chat_id: string }; Returns: undefined }
     }
   }
 }

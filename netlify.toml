@@ -13,17 +13,10 @@
   to     = "/index.html"
   status = 200
 
-# Forzar HTTPS
+# Forzar HTTPS en el subdominio de administración (Netlify)
 [[redirects]]
-  from   = "http://breakmanizales.com/*"
-  to     = "https://breakmanizales.com/:splat"
-  status = 301
-  force  = true
-
-# www → non-www
-[[redirects]]
-  from   = "https://www.breakmanizales.com/*"
-  to     = "https://breakmanizales.com/:splat"
+  from   = "http://administracion.hotelbreakmanizales.com/*"
+  to     = "https://administracion.hotelbreakmanizales.com/:splat"
   status = 301
   force  = true
 
@@ -34,10 +27,10 @@
     X-Frame-Options            = "DENY"
     X-Content-Type-Options     = "nosniff"
     Referrer-Policy            = "strict-origin-when-cross-origin"
-    Permissions-Policy         = "camera=(), microphone=(), geolocation=(self), payment=()"
+    Permissions-Policy         = "camera=(self), microphone=(self), geolocation=(self), payment=()"
     Strict-Transport-Security  = "max-age=31536000; includeSubDomains; preload"
     # CSP — ajustar cuando se agreguen servicios externos (Analytics, etc.)
-    Content-Security-Policy    = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src 'none'; object-src 'none';"
+    Content-Security-Policy    = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co blob:; media-src 'self' blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; frame-src 'none'; object-src 'none';"
     Cross-Origin-Opener-Policy = "same-origin"
 
 # Cache agresivo para assets con hash (Vite los hashea automáticamente)

@@ -27,10 +27,16 @@ enabled = true
 [auth]
 enabled = true
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["https://breakmanizales.com", "https://break-hotel-manizales.netlify.app"]
-jwt_expiry = 3600
+additional_redirect_urls = [
+  "https://breakmanizales.com",
+  "https://break-hotel-manizales.netlify.app",
+  "https://administracion.hotelbreakmanizales.com",
+]
+# Access token largo (7 días). El refresh token + autoRefresh en el cliente
+# mantienen la sesión del admin sin pedir credenciales de nuevo.
+jwt_expiry = 604800
 enable_refresh_token_rotation = true
-refresh_token_reuse_interval = 10
+refresh_token_reuse_interval = 30
 enable_signup = true
 
 [edge_runtime]
@@ -65,6 +71,13 @@ verify_jwt = true
 [functions.pxsol-sync]
 verify_jwt = true
 
+# Sync ocupación (habitaciones físicas) desde PxSol → Break
+[functions.pxsol-ocupacion-sync]
+verify_jwt = true
+
+[functions.chat-bot]
+verify_jwt = true
+
 # Reservada: PxSol no documenta webhooks salientes hoy.
 # Si se activa, llegaría sin JWT de Supabase (firma HMAC propia).
 [functions.pxsol-webhook]
@@ -75,3 +88,20 @@ verify_jwt = true
 
 [functions.siigo-sync-factura]
 verify_jwt = true
+
+# Factura Siigo autorizada desde panel (recepción/gerencia)
+[functions.siigo-facturar-reserva]
+verify_jwt = true
+
+# Matching formulario público ↔ reservas PxSol/Break
+[functions.formulario-sync]
+verify_jwt = true
+
+# Cola de aprobación Break → PxSol. Solo frontend autenticado.
+# El envío real exige además PXSOL_WRITE_ENABLED=true (apagado por defecto).
+[functions.pxsol-reservas-write]
+verify_jwt = true
+
+# Chat huésped: el QR no tiene sesión. Validamos token en la función.
+[functions.chat-media]
+verify_jwt = false

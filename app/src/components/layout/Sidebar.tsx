@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Users, Sparkles,
-  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog,
+  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog, KeyRound,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import type { RolUsuario } from '@/types/database.types'
@@ -22,12 +22,14 @@ const NAV_POR_ROL: Record<RolUsuario, NavItem[]> = {
     { path: '/admin/finanzas',    label: 'Finanzas',    Icon: TrendingUp },
     { path: '/admin/marketing',   label: 'Marketing',   Icon: Megaphone },
     { path: '/admin/usuarios',    label: 'Usuarios',    Icon: UserCog },
+    { path: '/admin/claves',      label: 'Claves',      Icon: KeyRound },
   ],
   recepcion: [
     { path: '/admin',           label: 'Dashboard', Icon: LayoutDashboard },
     { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },
     { path: '/admin/huespedes', label: 'Huéspedes', Icon: Users },
     { path: '/admin/aseo',      label: 'Aseo',      Icon: Sparkles },
+    { path: '/admin/claves',    label: 'Claves',    Icon: KeyRound },
   ],
   aseo: [
     { path: '/admin',            label: 'Dashboard',  Icon: LayoutDashboard },

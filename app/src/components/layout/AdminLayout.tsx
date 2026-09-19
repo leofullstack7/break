@@ -4,8 +4,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { BottomNav } from './BottomNav'
+import { useChatInbox } from '@/hooks/useChatInbox'
 
-// Mapa de ruta → título de página
 const TITULOS: Record<string, string> = {
   '/admin':             'Dashboard',
   '/admin/reservas':    'Reservas',
@@ -15,6 +15,8 @@ const TITULOS: Record<string, string> = {
   '/admin/finanzas':    'Finanzas',
   '/admin/marketing':   'Marketing',
   '/admin/usuarios':    'Usuarios',
+  '/admin/claves':      'Claves',
+  '/admin/conversaciones': 'Conversaciones',
 }
 
 interface AdminLayoutProps {
@@ -24,21 +26,21 @@ interface AdminLayoutProps {
 export function AdminLayout({ children }: AdminLayoutProps) {
   const location  = useLocation()
   const [sidebarAbierto, setSidebarAbierto] = useState(false)
-  const titulo = TITULOS[location.pathname] ?? 'Panel'
+  useChatInbox({ escuchar: true })
+  const esChat = location.pathname.startsWith('/admin/conversaciones')
+  const titulo = TITULOS[location.pathname] ??
+    (location.pathname.startsWith('/admin/huespedes/') ? 'Huésped' : 'Panel')
 
   return (
-    <div className="flex h-screen bg-negro-absoluto overflow-hidden">
+    <div className="flex h-[100dvh] max-h-[100dvh] bg-negro-absoluto overflow-hidden w-full max-w-[100vw]">
 
-      {/* ── SIDEBAR DESKTOP (fijo, siempre visible en lg+) ── */}
       <div className="hidden lg:flex shrink-0">
         <Sidebar />
       </div>
 
-      {/* ── SIDEBAR MOBILE (drawer animado) ── */}
       <AnimatePresence>
         {sidebarAbierto && (
           <>
-            {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -47,7 +49,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
               className="fixed inset-0 bg-negro-absoluto/80 z-40 lg:hidden"
               onClick={() => setSidebarAbierto(false)}
             />
-            {/* Drawer */}
             <motion.div
               initial={{ x: -240 }}
               animate={{ x: 0 }}
@@ -61,18 +62,21 @@ export function AdminLayout({ children }: AdminLayoutProps) {
         )}
       </AnimatePresence>
 
-      {/* ── CONTENIDO PRINCIPAL ── */}
-      <div className="flex flex-col flex-1 min-w-0">
+      {/* Columna principal tipo app (ancho contenido centrado en móvil grande) */}
+      <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
         <Topbar titulo={titulo} onMenuClick={() => setSidebarAbierto(true)} />
 
-        <main className="flex-1 overflow-y-auto pb-20 lg:pb-0">
-          {children}
+        <main
+          className={`flex-1 min-h-0 overflow-x-hidden ${esChat ? 'overflow-hidden' : 'overflow-y-auto overscroll-y-contain'}`}
+          style={{ paddingBottom: esChat ? 0 : 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className={`w-full min-w-0 ${esChat ? 'h-full' : ''}`}>
+            {children}
+          </div>
         </main>
       </div>
 
-      {/* ── BOTTOM NAV MOBILE ── */}
       <BottomNav />
-
     </div>
   )
 }

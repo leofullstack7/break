@@ -3,7 +3,6 @@ import { LayoutDashboard, CalendarDays, Users, Sparkles, Megaphone, TrendingUp }
 import { useAuthStore } from '@/store/authStore'
 import type { RolUsuario } from '@/types/database.types'
 
-// Solo los 4 items más importantes por rol para el nav móvil
 const BOTTOM_POR_ROL: Record<RolUsuario, { path: string; label: string; Icon: React.ElementType; end?: boolean }[]> = {
   gerente: [
     { path: '/admin',           label: 'Inicio',    Icon: LayoutDashboard, end: true },
@@ -35,22 +34,27 @@ export function BottomNav() {
   if (items.length === 0) return null
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-negro-profundo/95 backdrop-blur-md border-t border-white/10 flex items-center justify-around px-2 z-40">
-      {items.map(({ path, label, Icon, end }) => (
-        <NavLink
-          key={path}
-          to={path}
-          end={end}
-          className={({ isActive }) =>
-            `flex flex-col items-center gap-1 px-4 py-1 rounded-xl transition-all ${
-              isActive ? 'text-dorado' : 'text-blanco-roto/50'
-            }`
-          }
-        >
-          <Icon size={20} />
-          <span className="text-body-xs">{label}</span>
-        </NavLink>
-      ))}
+    <nav
+      className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-white/10 bg-negro-profundo/95 backdrop-blur-md"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+    >
+      <div className="h-16 max-w-lg mx-auto flex items-stretch justify-around px-1">
+        {items.map(({ path, label, Icon, end }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={end}
+            className={({ isActive }) =>
+              `flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1 rounded-xl transition-all ${
+                isActive ? 'text-dorado' : 'text-blanco-roto/45'
+              }`
+            }
+          >
+            <Icon size={20} className="shrink-0" />
+            <span className="text-[0.65rem] leading-none truncate max-w-full">{label}</span>
+          </NavLink>
+        ))}
+      </div>
     </nav>
   )
 }

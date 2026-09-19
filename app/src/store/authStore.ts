@@ -13,6 +13,8 @@ interface AuthState {
   init: () => void
 }
 
+let authListenerBound = false
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   rol: null,
@@ -29,18 +31,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut()
+    await supabase.auth.signOut({ scope: 'local' })
     set({ user: null, rol: null, nombre: null })
   },
 
   init: () => {
+    if (authListenerBound) return
+    authListenerBound = true
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       const user = session?.user ?? null
       set({ user, inicializado: true })
       if (user) get().fetchPerfil(user.id)
     })
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        set({ user: null, rol: null, nombre: null, inicializado: true })
+        return
+      }
+
       const user = session?.user ?? null
       set({ user, inicializado: true })
       if (user) get().fetchPerfil(user.id)

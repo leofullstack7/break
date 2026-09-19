@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { StatCard } from '@/components/ui/StatCard'
+import { formatCOP } from '@/lib/dinero'
 import type { OcupacionMensual } from '@/types/database.types'
 
 async function fetchOcupacion(): Promise<OcupacionMensual[]> {
@@ -22,8 +23,7 @@ async function fetchComisionesPorOperador() {
 }
 
 function formatMonto(m: number) {
-  if (m >= 1_000_000) return `$${(m / 1_000_000).toFixed(1)}M`
-  return `$${(m / 1_000).toFixed(0)}k`
+  return formatCOP(m)
 }
 
 function formatMes(fechaStr: string) {

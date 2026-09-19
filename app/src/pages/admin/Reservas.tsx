@@ -1,8 +1,9 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronRight, ChevronLeft, Eye, Plus, Search, X, Pencil, Trash2, AlertTriangle } from 'lucide-react'
+import { CalendarDays, ChevronRight, ChevronLeft, Eye, Plus, Search, X, Pencil, Trash2, AlertTriangle, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { autorizarFacturaSiigo } from '@/lib/siigo-facturar'
 import { Badge } from '@/components/ui/Badge'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Modal } from '@/components/ui/Modal'
@@ -36,6 +37,10 @@ interface ReservaFila {
   metodo_pago: string | null
   estado: EstadoReserva
   observaciones: string | null
+  siigo_estado: string | null
+  siigo_numero: string | null
+  siigo_factura_id: string | null
+  siigo_error: string | null
 }
 
 // ── Queries ───────────────────────────────────────────────────────
@@ -47,6 +52,7 @@ async function fetchReservas(): Promise<ReservaFila[]> {
       aseo_cobrado, ingreso_hotel, ingreso_operador, ingreso_neto,
       check_in_early, check_out_late, verificacion,
       estado, acompanante, cc_acompanante, metodo_pago, observaciones, huesped_id,
+      siigo_estado, siigo_numero, siigo_factura_id, siigo_error,
       habitaciones(numero),
       huespedes(nombre, cedula, celular),
       operadores(nombre)
@@ -80,6 +86,10 @@ async function fetchReservas(): Promise<ReservaFila[]> {
     metodo_pago: r.metodo_pago,
     estado: r.estado,
     observaciones: r.observaciones,
+    siigo_estado: r.siigo_estado ?? null,
+    siigo_numero: r.siigo_numero ?? null,
+    siigo_factura_id: r.siigo_factura_id ?? null,
+    siigo_error: r.siigo_error ?? null,
   }))
 }
 
@@ -125,11 +135,7 @@ const fMonto = (m: number | null | undefined) => {
   if (m == null) return '—'
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(m)
 }
-const fMontoCorto = (m: number | null | undefined) => {
-  if (m == null) return '—'
-  if (m >= 1_000_000) return `$${(m / 1_000_000).toFixed(1)}M`
-  return `$${(m / 1_000).toFixed(0)}k`
-}
+const fMontoCorto = (m: number | null | undefined) => fMonto(m)
 
 const ESTADOS_FILTRO = [
   { value: '', label: 'Todos' },
@@ -318,12 +324,251 @@ function ModalCancelar({ r, onClose }: { r: ReservaFila; onClose: () => void }) 
   )
 }
 
+// ── Modal Autorizar factura Siigo ─────────────────────────────────
+function ModalFacturarSiigo({ r, onClose }: { r: ReservaFila; onClose: () => void }) {
+  const qc = useQueryClient()
+  const [busquedaH, setBusquedaH] = useState(r.huesped_nombre !== '—' ? r.huesped_nombre : '')
+  const [huespedSel, setHuespedSel] = useState<Huesped | null>(null)
+  const [mostrarResultados, setMostrarResultados] = useState(false)
+  const [monto, setMonto] = useState(String(r.pago_total > 0 ? r.pago_total : 1))
+  const [metodo, setMetodo] = useState(r.metodo_pago || 'Transferencia')
+  const docInicial = (r.huesped_cedula && !r.huesped_cedula.startsWith('PXSOL-') && !r.huesped_cedula.startsWith('SIN_CC_'))
+    ? r.huesped_cedula
+    : ''
+  const [documento, setDocumento] = useState(docInicial)
+  const [usarConsumidorFinal, setUsarConsumidorFinal] = useState(
+    !!(r.huesped_cedula && /^PXSOL-/i.test(r.huesped_cedula)),
+  )
+  const [autorizado, setAutorizado] = useState(false)
+  const [error, setError] = useState('')
+  const [okMsg, setOkMsg] = useState('')
+  const [enviando, setEnviando] = useState(false)
+
+  const { data: resultados = [] } = useQuery({
+    queryKey: ['buscar-h-siigo', busquedaH],
+    queryFn: () => buscarHuespedes(busquedaH),
+    enabled: busquedaH.length >= 2,
+    staleTime: 10_000,
+  })
+
+  const titularActual = {
+    id: r.huesped_id,
+    nombre: r.huesped_nombre,
+    cedula: r.huesped_cedula ?? '',
+    celular: r.huesped_celular,
+  } as Huesped
+  const seleccionado = huespedSel ?? titularActual
+  const docSintetico = !!(seleccionado.cedula && (/^PXSOL-/i.test(seleccionado.cedula) || /^SIN_CC_/i.test(seleccionado.cedula)))
+
+  async function handleAutorizar() {
+    setError('')
+    setOkMsg('')
+    if (!autorizado) { setError('Marca la casilla de autorizacion para continuar'); return }
+    const valor = Number(monto)
+    if (!Number.isFinite(valor) || valor <= 0) {
+      setError('El monto debe ser mayor a 0'); return
+    }
+    if (!seleccionado?.id) { setError('Selecciona el huesped a facturar'); return }
+    if (!usarConsumidorFinal && !documento.trim() && (docSintetico || !seleccionado.cedula)) {
+      setError('Escribe la cedula real, o marca Consumidor Final para prueba'); return
+    }
+
+    setEnviando(true)
+    try {
+      const res = await autorizarFacturaSiigo({
+        reservaId: r.id,
+        huespedId: seleccionado.id,
+        actualizarTitular: seleccionado.id !== r.huesped_id,
+        metodoPago: metodo,
+        monto: valor,
+        documento: documento.trim() || undefined,
+        usarConsumidorFinal,
+      })
+      if (!res.ok) throw new Error(res.error || 'No se pudo facturar')
+      setOkMsg(
+        `Factura enviada a Siigo` +
+          (res.siigo?.numero ? ` · N° ${res.siigo.numero}` : '') +
+          (res.consumidor_final ? ' · Consumidor Final' : '') +
+          (res.stamp ? ' (timbrada DIAN)' : ' (borrador)'),
+      )
+      qc.invalidateQueries({ queryKey: ['reservas-completas'] })
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error al facturar')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  const yaFacturada = r.siigo_estado === 'facturado'
+
+  return (
+    <Modal isOpen onClose={onClose} title="Autorizar factura Siigo" size="md">
+      <div className="space-y-4">
+        <p className="text-body-sm text-blanco-roto/55">
+          Hab. {r.habitacion_numero} · {fFecha(r.fecha_entrada)} → {fFecha(r.fecha_salida)}
+        </p>
+
+        {yaFacturada && (
+          <div className="rounded-xl border border-green-700/30 bg-green-900/20 px-4 py-3 text-body-sm text-green-300">
+            Ya facturada{r.siigo_numero ? ` · N° ${r.siigo_numero}` : ''}.
+          </div>
+        )}
+
+        {/* Solo errores del intento actual (no el histórico de siigo_error) */}
+        {error && (
+          <div className="flex items-start gap-2 text-body-sm text-red-400">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span className="break-words">{error}</span>
+          </div>
+        )}
+
+        {docSintetico && !yaFacturada && (
+          <div className="rounded-xl border border-amber-600/30 bg-amber-900/15 px-4 py-3 text-body-sm text-amber-200/90">
+            Documento interno de PxSol (<span className="font-mono">{seleccionado.cedula}</span>).
+            No sirve para Siigo: ingresa cedula real o marca Consumidor Final.
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <label className="text-body-xs text-blanco-roto/40 uppercase tracking-wider">Facturar a (huesped)</label>
+          <div className="glass rounded-xl px-4 py-3">
+            <p className="text-body-sm font-semibold text-blanco-roto truncate">{seleccionado.nombre}</p>
+            <p className="text-body-xs text-blanco-roto/50 font-mono">{mostrarCedula(seleccionado.cedula)}</p>
+          </div>
+          <div className="relative">
+            <div className="flex items-center gap-2 bg-negro-profundo border border-white/10 rounded-xl px-3 py-2.5">
+              <Search size={14} className="text-blanco-roto/30 shrink-0" />
+              <input
+                value={busquedaH}
+                onChange={e => { setBusquedaH(e.target.value); setMostrarResultados(true) }}
+                placeholder="Buscar otro huesped…"
+                className="flex-1 bg-transparent text-body-sm text-blanco-roto focus:outline-none placeholder:text-blanco-roto/25"
+              />
+            </div>
+            {mostrarResultados && resultados.length > 0 && (
+              <div className="absolute z-20 mt-1 w-full rounded-xl border border-white/10 bg-negro-profundo shadow-xl overflow-hidden">
+                {resultados.map(h => (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => {
+                      setHuespedSel(h)
+                      setBusquedaH(h.nombre)
+                      setMostrarResultados(false)
+                      if (h.cedula && !/^PXSOL-/i.test(h.cedula) && !/^SIN_CC_/i.test(h.cedula)) {
+                        setDocumento(h.cedula)
+                        setUsarConsumidorFinal(false)
+                      }
+                    }}
+                    className="w-full text-left px-3 py-2.5 hover:bg-white/5 border-b border-white/5 last:border-0"
+                  >
+                    <p className="text-body-sm text-blanco-roto">{h.nombre}</p>
+                    <p className="text-body-xs text-blanco-roto/40 font-mono">{mostrarCedula(h.cedula)}</p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <label className="text-body-xs text-blanco-roto/40 uppercase tracking-wider">Documento (cedula / NIT)</label>
+          <input
+            value={documento}
+            onChange={e => setDocumento(e.target.value)}
+            placeholder="Ej. 1053812345"
+            disabled={usarConsumidorFinal}
+            className="w-full bg-negro-profundo border border-white/10 rounded-xl px-3 py-2.5 text-body-sm text-blanco-roto focus:outline-none focus:border-dorado/50 disabled:opacity-40"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-body-xs text-blanco-roto/40 uppercase tracking-wider">Monto COP</label>
+            <input
+              type="number"
+              min={1}
+              value={monto}
+              onChange={e => setMonto(e.target.value)}
+              className="w-full bg-negro-profundo border border-white/10 rounded-xl px-3 py-2.5 text-body-sm text-blanco-roto focus:outline-none focus:border-dorado/50"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-body-xs text-blanco-roto/40 uppercase tracking-wider">Forma de pago</label>
+            <select
+              value={metodo}
+              onChange={e => setMetodo(e.target.value)}
+              className="w-full bg-negro-profundo border border-white/10 rounded-xl px-3 py-2.5 text-body-sm text-blanco-roto focus:outline-none focus:border-dorado/50"
+            >
+              {['Transferencia', 'Contado', 'Efectivo', 'Tarjeta de Credito', 'Tarjeta de Debito', 'Otro'].map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <label className="flex items-start gap-3 glass rounded-xl px-4 py-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={usarConsumidorFinal}
+            onChange={e => setUsarConsumidorFinal(e.target.checked)}
+            className="mt-1 accent-dorado"
+            disabled={yaFacturada}
+          />
+          <span className="text-body-sm text-blanco-roto/80">
+            Facturar como <strong className="text-blanco-roto">Consumidor Final</strong>
+            {' '}(solo si no hay cédula real).
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3 glass rounded-xl px-4 py-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autorizado}
+            onChange={e => setAutorizado(e.target.checked)}
+            className="mt-1 accent-dorado"
+            disabled={yaFacturada}
+          />
+          <span className="text-body-sm text-blanco-roto/80">
+            Autorizo crear la factura en <strong className="text-dorado font-semibold">Siigo</strong> a
+            nombre de <strong className="text-blanco-roto">{seleccionado.nombre}</strong> por {fMonto(Number(monto) || 0)}.
+          </span>
+        </label>
+
+        {okMsg && (
+          <div className="rounded-xl border border-green-700/30 bg-green-900/20 px-4 py-3 text-body-sm text-green-300">
+            {okMsg}
+          </div>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl border border-white/10 text-body-sm text-blanco-roto/60">
+            {okMsg ? 'Cerrar' : 'Cancelar'}
+          </button>
+          {!yaFacturada && !okMsg && (
+            <button
+              type="button"
+              onClick={() => void handleAutorizar()}
+              disabled={enviando || !autorizado}
+              className="flex-1 py-2.5 rounded-xl bg-dorado text-negro-absoluto font-semibold text-body-sm disabled:opacity-40"
+            >
+              {enviando ? 'Enviando…' : 'Autorizar y facturar'}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 // ── Modal "Ver más" ───────────────────────────────────────────────
-function ModalDetalle({ r, onClose, onEditar, onCancelar }: {
+function ModalDetalle({ r, onClose, onEditar, onCancelar, onFacturar }: {
   r: ReservaFila
   onClose: () => void
   onEditar: () => void
   onCancelar: () => void
+  onFacturar: () => void
 }) {
   const fila = (label: string, val: React.ReactNode) => val != null && val !== '' && val !== '—' ? (
     <div className="flex items-start justify-between py-2.5 border-b border-white/5 last:border-0 gap-4">
@@ -382,8 +627,29 @@ function ModalDetalle({ r, onClose, onEditar, onCancelar }: {
             {fila('Check-in early', r.check_in_early)}
             {fila('Check-out late', r.check_out_late)}
             {fila('Observaciones', r.observaciones)}
+            {fila(
+              'Siigo',
+              r.siigo_estado === 'facturado'
+                ? `Facturado${r.siigo_numero ? ` · ${r.siigo_numero}` : ''}`
+                : r.siigo_estado === 'error'
+                  ? 'Error al facturar'
+                  : r.siigo_estado === 'pendiente'
+                    ? 'Pendiente'
+                    : 'Sin factura',
+            )}
           </div>
         </section>
+
+        {r.estado !== 'cancelada' && (
+          <button
+            type="button"
+            onClick={onFacturar}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-dorado/40 text-dorado font-semibold text-body-sm hover:bg-dorado/10"
+          >
+            <FileText size={16} />
+            {r.siigo_estado === 'facturado' ? 'Ver factura Siigo' : 'Autorizar factura Siigo'}
+          </button>
+        )}
 
         {/* Acciones */}
         {puedeEditar && (
@@ -720,6 +986,7 @@ export default function Reservas() {
   const [modalVer,      setModalVer]      = useState<ReservaFila | null>(null)
   const [modalEditar,   setModalEditar]   = useState<ReservaFila | null>(null)
   const [modalCancelar, setModalCancelar] = useState<ReservaFila | null>(null)
+  const [modalFacturar, setModalFacturar] = useState<ReservaFila | null>(null)
   const [modalNueva,    setModalNueva]    = useState(false)
 
   const { data: todas = [], isLoading } = useQuery({
@@ -928,10 +1195,12 @@ export default function Reservas() {
           onClose={() => setModalVer(null)}
           onEditar={() => { setModalEditar(modalVer); setModalVer(null) }}
           onCancelar={() => { setModalCancelar(modalVer); setModalVer(null) }}
+          onFacturar={() => { setModalFacturar(modalVer); setModalVer(null) }}
         />
       )}
       {modalEditar   && <ModalEditar   r={modalEditar}   onClose={() => setModalEditar(null)} />}
       {modalCancelar && <ModalCancelar r={modalCancelar} onClose={() => setModalCancelar(null)} />}
+      {modalFacturar && <ModalFacturarSiigo r={modalFacturar} onClose={() => setModalFacturar(null)} />}
       {modalNueva    && <ModalNuevaReserva onClose={() => setModalNueva(false)} />}
     </div>
   )

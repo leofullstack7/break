@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database.types'
 
-export const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseKey  = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error(
@@ -11,24 +11,26 @@ if (!supabaseUrl || !supabaseKey) {
   )
 }
 
+const AUTH_STORAGE_KEY = 'break-admin-auth'
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
-    // Persistir sesión en localStorage
+    // Sesión larga: localStorage + refresh automático del access token
     persistSession: true,
-    // Detectar sesión desde URL (para magic links si se usan)
-    detectSessionInUrl: true,
-    // Auto-refrescar el token antes de que expire
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    storageKey: AUTH_STORAGE_KEY,
+    // Evita que un refresh en otra pestaña invalide esta sesión de inmediato
+    flowType: 'pkce',
   },
   realtime: {
     params: {
-      // Log level para desarrollo — cambiar a 'error' en producción
       log_level: import.meta.env.DEV ? 'info' : 'error',
     },
   },
 })
 
-// Helper: obtener el rol del usuario actual desde la tabla usuarios
 export async function getMiRol(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
