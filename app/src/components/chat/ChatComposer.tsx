@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ImagePlus, Mic, Send, Square, X } from 'lucide-react'
 import { comprimirImagen } from '@/lib/chat-habitacion'
+import { mimeAudioBase, mimeAudioPreferido } from '@/lib/chat-audio-mime'
 
 interface Props {
   disabled?: boolean
@@ -13,19 +14,12 @@ interface Props {
   }) => Promise<void>
 }
 
-function mimeAudioPreferido() {
-  if (typeof MediaRecorder === 'undefined') return ''
-  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return 'audio/webm;codecs=opus'
-  if (MediaRecorder.isTypeSupported('audio/mp4')) return 'audio/mp4'
-  if (MediaRecorder.isTypeSupported('audio/webm')) return 'audio/webm'
-  return ''
-}
-
 export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
   const [texto, setTexto] = useState('')
   const [grabando, setGrabando] = useState(false)
   const [segundos, setSegundos] = useState(0)
   const [preview, setPreview] = useState<{ tipo: 'imagen' | 'audio'; blob: Blob; url: string; nombre: string } | null>(null)
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
   const mediaRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
@@ -42,13 +36,20 @@ export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
   async function enviarTexto() {
     const msg = texto.trim()
     if (!msg || enviando) return
+    setErrorEnvio(null)
     setTexto('')
-    await onEnviar({ tipo: 'texto', contenido: msg })
+    try {
+      await onEnviar({ tipo: 'texto', contenido: msg })
+    } catch (e) {
+      setTexto(msg)
+      setErrorEnvio(e instanceof Error ? e.message : 'No se pudo enviar')
+    }
     taRef.current?.focus()
   }
 
   async function elegirFoto(file: File | undefined) {
     if (!file) return
+    setErrorEnvio(null)
     const blob = await comprimirImagen(file)
     const url = URL.createObjectURL(blob)
     setPreview({ tipo: 'imagen', blob, url, nombre: file.name || 'foto.jpg' })
@@ -56,6 +57,7 @@ export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
 
   async function iniciarGrabacion() {
     if (grabando || !navigator.mediaDevices?.getUserMedia) return
+    setErrorEnvio(null)
     const mime = mimeAudioPreferido()
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream)
@@ -65,8 +67,10 @@ export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
     }
     rec.onstop = () => {
       stream.getTracks().forEach(t => t.stop())
-      const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
-      const ext = rec.mimeType.includes('mp4') ? 'm4a' : 'webm'
+      // Tipo base sin ;codecs=… para que chat-media acepte el upload
+      const tipoBase = mimeAudioBase(rec.mimeType || 'audio/webm')
+      const blob = new Blob(chunksRef.current, { type: tipoBase })
+      const ext = tipoBase.includes('mp4') ? 'm4a' : 'webm'
       const url = URL.createObjectURL(blob)
       setPreview({ tipo: 'audio', blob, url, nombre: `nota.${ext}` })
     }
@@ -87,23 +91,34 @@ export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
   function cancelarPreview() {
     if (preview?.url) URL.revokeObjectURL(preview.url)
     setPreview(null)
+    setErrorEnvio(null)
   }
 
   async function enviarPreview() {
     if (!preview || enviando) return
     const p = preview
-    setPreview(null)
-    await onEnviar({
-      tipo: p.tipo,
-      contenido: '',
-      archivo: p.blob,
-      nombreArchivo: p.nombre,
-    })
-    URL.revokeObjectURL(p.url)
+    setErrorEnvio(null)
+    try {
+      await onEnviar({
+        tipo: p.tipo,
+        contenido: '',
+        archivo: p.blob,
+        nombreArchivo: p.nombre,
+      })
+      // Solo limpiar tras éxito — si falla, el usuario conserva el preview
+      setPreview(null)
+      URL.revokeObjectURL(p.url)
+    } catch (e) {
+      setErrorEnvio(e instanceof Error ? e.message : 'No se pudo enviar el adjunto')
+    }
   }
 
   return (
     <div className="border-t border-white/[0.06] bg-negro-profundo/90 backdrop-blur-md px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {errorEnvio && (
+        <p className="mb-2 text-body-xs text-red-300/90 px-1">{errorEnvio}</p>
+      )}
+
       {preview && (
         <div className="mb-2 rounded-xl border border-white/10 bg-white/[0.04] p-2 flex items-center gap-2">
           {preview.tipo === 'imagen' ? (
@@ -116,7 +131,7 @@ export function ChatComposer({ disabled, enviando, onEnviar }: Props) {
           </button>
           <button
             type="button"
-            onClick={enviarPreview}
+            onClick={() => void enviarPreview()}
             disabled={enviando}
             className="w-9 h-9 rounded-full bg-dorado text-negro-absoluto flex items-center justify-center disabled:opacity-50"
           >
