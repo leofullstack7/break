@@ -29,6 +29,16 @@ const MIME_OK = new Set([
   "audio/x-m4a",
 ]);
 
+/**
+ * MediaRecorder suele devolver "audio/webm;codecs=opus".
+ * El bucket y la whitelist usan solo el tipo base.
+ */
+function normalizarMime(raw: string, tipo: string): string {
+  const base = (raw || "").split(";")[0].trim().toLowerCase();
+  if (base) return base;
+  return tipo === "audio" ? "audio/webm" : "image/jpeg";
+}
+
 function extDeMime(mime: string, tipo: string) {
   if (mime.includes("png")) return "png";
   if (mime.includes("webp")) return "webp";
@@ -61,9 +71,9 @@ Deno.serve(async (req: Request) => {
       return json({ ok: false, error: "El archivo supera 12 MB" }, 400);
     }
 
-    const mime = archivo.type || (tipo === "audio" ? "audio/webm" : "image/jpeg");
+    const mime = normalizarMime(archivo.type, tipo);
     if (!MIME_OK.has(mime)) {
-      return json({ ok: false, error: "Formato no permitido" }, 400);
+      return json({ ok: false, error: `Formato no permitido (${mime || "sin tipo"})` }, 400);
     }
 
     const supabase = getSupabaseAdmin();

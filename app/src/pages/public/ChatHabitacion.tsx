@@ -91,6 +91,9 @@ export default function ChatHabitacion() {
         mediaPath,
       })
       setSala(prev => prev ? { ...prev, mensajes: [...prev.mensajes, msg as ChatMensaje] } : prev)
+    } catch (e) {
+      // Re-lanzar para que ChatComposer restaure preview / muestre error
+      throw e instanceof Error ? e : new Error('No se pudo enviar el mensaje')
     } finally {
       setEnviando(false)
     }

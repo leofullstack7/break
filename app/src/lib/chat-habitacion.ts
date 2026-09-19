@@ -174,21 +174,32 @@ export async function subirAdjuntoChat(params: {
   tipo: 'imagen' | 'audio'
   token?: string
 }): Promise<{ path: string; url: string }> {
+  // MediaRecorder a veces manda "audio/webm;codecs=opus" — chat-media solo acepta tipo base
+  const mimeBase = (params.archivo.type || '').split(';')[0].trim().toLowerCase() ||
+    (params.tipo === 'audio' ? 'audio/webm' : 'image/jpeg')
+  const archivo =
+    params.archivo.type === mimeBase
+      ? params.archivo
+      : new File([params.archivo], params.nombre, { type: mimeBase })
+
   const form = new FormData()
-  form.append('archivo', params.archivo, params.nombre)
+  form.append('archivo', archivo, params.nombre)
   form.append('tipo', params.tipo)
   if (params.token) form.append('token', params.token)
 
   const { data: { session } } = await supabase.auth.getSession()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   const headers: Record<string, string> = {}
-  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+  if (anon) headers.apikey = anon
+  // Huésped (QR): Bearer anon. Staff: JWT de sesión.
+  headers.Authorization = `Bearer ${session?.access_token ?? anon ?? ''}`
 
   const res = await fetch(`${supabaseUrl}/functions/v1/chat-media`, {
     method: 'POST',
     headers,
     body: form,
   })
-  const body = await res.json()
+  const body = await res.json().catch(() => ({}))
   if (!res.ok || !body.ok) throw new Error(body.error ?? 'No se pudo subir el archivo')
   return { path: body.path, url: body.url }
 }
