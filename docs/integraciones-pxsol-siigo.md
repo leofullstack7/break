@@ -31,6 +31,8 @@ Supabase (siigo_factura_id, CUFE, PDF, siigo_estado)
 |---|---|---|
 | `pxsol-auth` | sí | Health check de la API Key (no hay OAuth) |
 | `pxsol-sync` | sí | Pull de vouchers → `pxsol_vouchers` |
+| `pxsol-ocupacion-sync` | sí | Pull ocupación in-house → habitaciones/reservas |
+| `pxsol-contactos-sync` | sí | Pull contactos CRM → `huespedes` (vouchers + bookings) |
 | `pxsol-webhook` | no | Placeholder 501 — PxSol no documenta webhooks |
 | `siigo-auth` | sí | Renueva / chequea token Siigo (24h) |
 | `siigo-sync-factura` | sí | Crea factura DIAN por voucher pendiente |

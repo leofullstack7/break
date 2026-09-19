@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase, supabaseUrl } from '@/lib/supabase'
+import { syncContactosPxsol } from '@/lib/pxsol-contactos'
 import { Modal } from '@/components/ui/Modal'
 import {
   Users, Globe, MessageCircle, Mail, Send, Copy, Check,
-  ExternalLink, Loader2, AlertTriangle, CheckCircle2, BarChart3,
+  ExternalLink, Loader2, AlertTriangle, CheckCircle2, BarChart3, RefreshCw,
 } from 'lucide-react'
 
 // ── Tipos ─────────────────────────────────────────────────────────
@@ -110,9 +111,12 @@ async function enviarWhatsAppMasivo(params: {
 
 // ── Componente principal ──────────────────────────────────────────
 export default function Marketing() {
+  const queryClient = useQueryClient()
   const [tab, setTab] = useState<TabId>('metricas')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
-  const { data: contactos = [], isLoading } = useQuery({
+  const { data: contactos = [] } = useQuery({
     queryKey: ['marketing-contactos'],
     queryFn: fetchContactos,
   })
@@ -128,8 +132,50 @@ export default function Marketing() {
     { id: 'whatsapp',  label: 'WhatsApp',  Icon: MessageCircle },
   ]
 
+  async function sincronizarContactos() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await syncContactosPxsol({ force: true })
+      if (r.ok) {
+        setSyncMsg(
+          `PxSol · ${r.creados ?? 0} nuevos · ${r.actualizados ?? 0} actualizados` +
+            (r.errores ? ` · ${r.errores} errores` : ''),
+        )
+        await queryClient.invalidateQueries({ queryKey: ['marketing-contactos'] })
+        await queryClient.invalidateQueries({ queryKey: ['huespedes'] })
+      } else {
+        setSyncMsg(r.error ?? 'No se pudo sincronizar con PxSol')
+      }
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : 'Error de sync')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-6">
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-body-xs text-blanco-roto/35 uppercase tracking-wider">
+            Base de contactos
+          </p>
+          {syncMsg && (
+            <p className="text-body-xs text-blanco-roto/45 mt-1 break-words">{syncMsg}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => void sincronizarContactos()}
+          disabled={syncing}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-body-xs text-blanco-roto/70 hover:text-blanco-roto hover:border-dorado/40 disabled:opacity-50 transition-colors shrink-0"
+        >
+          <RefreshCw size={14} className={syncing ? 'animate-spin text-dorado' : 'text-dorado/80'} />
+          {syncing ? 'Sincronizando…' : 'Sincronizar contactos PxSol'}
+        </button>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-negro-profundo/60 rounded-xl p-1 border border-white/[0.06]">

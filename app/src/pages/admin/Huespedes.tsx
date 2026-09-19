@@ -1,8 +1,9 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, Users } from 'lucide-react'
+import { ChevronRight, RefreshCw, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { syncContactosPxsol } from '@/lib/pxsol-contactos'
 import { SearchInput } from '@/components/ui/SearchInput'
 import type { Huesped } from '@/types/database.types'
 
@@ -16,7 +17,7 @@ async function fetchHuespedes(busqueda: string): Promise<HuespedConVisitas[]> {
     .select('*, reservas(count)')
     .is('deleted_at', null)
     .order('nombre')
-    .limit(200)
+    .limit(500)
 
   if (busqueda.trim()) {
     q = q.or(
@@ -34,13 +35,16 @@ async function fetchHuespedes(busqueda: string): Promise<HuespedConVisitas[]> {
 }
 
 export default function Huespedes() {
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [busqueda, setBusqueda] = useState('')
   const [filtroNac, setFiltroNac] = useState('')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
 
   const { data: huespedes = [], isLoading } = useQuery({
     queryKey: ['huespedes', busqueda],
-    queryFn:  () => fetchHuespedes(busqueda),
+    queryFn: () => fetchHuespedes(busqueda),
     staleTime: 60_000,
   })
 
@@ -50,8 +54,52 @@ export default function Huespedes() {
 
   const extranjeros = huespedes.filter(h => h.nacionalidad !== 'colombiana').length
 
+  async function sincronizarContactos() {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const r = await syncContactosPxsol({ force: true })
+      if (r.ok) {
+        setSyncMsg(
+          `PxSol · ${r.creados ?? 0} nuevos · ${r.actualizados ?? 0} actualizados` +
+            (r.errores ? ` · ${r.errores} errores` : '') +
+            ` · ${r.contactos_unicos ?? 0} en origen`,
+        )
+        await queryClient.invalidateQueries({ queryKey: ['huespedes'] })
+        await queryClient.invalidateQueries({ queryKey: ['marketing-contactos'] })
+      } else {
+        setSyncMsg(r.error ?? 'No se pudo sincronizar contactos con PxSol')
+      }
+    } catch (e) {
+      setSyncMsg(e instanceof Error ? e.message : 'Error de sync')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-5">
+
+      {/* Cabecera + sync manual */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-body-xs text-blanco-roto/35 uppercase tracking-wider">
+            CRM de huéspedes
+          </p>
+          {syncMsg && (
+            <p className="text-body-xs text-blanco-roto/45 mt-1 break-words">{syncMsg}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => void sincronizarContactos()}
+          disabled={syncing}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 text-body-xs text-blanco-roto/70 hover:text-blanco-roto hover:border-dorado/40 disabled:opacity-50 transition-colors shrink-0"
+        >
+          <RefreshCw size={14} className={syncing ? 'animate-spin text-dorado' : 'text-dorado/80'} />
+          {syncing ? 'Sincronizando…' : 'Sincronizar contactos PxSol'}
+        </button>
+      </div>
 
       {/* Stats rápidas */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
@@ -136,6 +184,11 @@ export default function Huespedes() {
                   >
                     <td className="px-5 py-3.5">
                       <p className="text-body-sm font-medium text-blanco-roto">{h.nombre}</p>
+                      {h.pxsol_pax_id && (
+                        <p className="text-body-xs text-blanco-roto/25 font-mono mt-0.5">
+                          PxSol · {h.pxsol_pax_id}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-3.5">
                       <p className="text-body-sm text-blanco-roto/60 font-mono">{h.celular ?? '—'}</p>

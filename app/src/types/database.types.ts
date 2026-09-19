@@ -79,6 +79,10 @@ export interface Huesped {
   deleted_at: string | null
   siigo_tercero_id: string | null
   siigo_sync_at: string | null
+  /** pax_id de PxSol — llave de sync CRM */
+  pxsol_pax_id: string | null
+  pxsol_raw: Record<string, unknown> | null
+  pxsol_sync_at: string | null
   created_at: string
   updated_at: string
 }
