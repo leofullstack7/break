@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Users, Sparkles,
-  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog, KeyRound,
+  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog, KeyRound, FileArchive,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import type { RolUsuario } from '@/types/database.types'
@@ -20,6 +20,7 @@ const NAV_POR_ROL: Record<RolUsuario, NavItem[]> = {
     { path: '/admin/aseo',        label: 'Aseo',        Icon: Sparkles },
     { path: '/admin/lavanderia',  label: 'Lavandería',  Icon: Shirt },
     { path: '/admin/finanzas',    label: 'Finanzas',    Icon: TrendingUp },
+    { path: '/admin/compras',     label: 'Compras',     Icon: FileArchive },
     { path: '/admin/marketing',   label: 'Marketing',   Icon: Megaphone },
     { path: '/admin/usuarios',    label: 'Usuarios',    Icon: UserCog },
     { path: '/admin/claves',      label: 'Claves',      Icon: KeyRound },
@@ -29,6 +30,7 @@ const NAV_POR_ROL: Record<RolUsuario, NavItem[]> = {
     { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },
     { path: '/admin/huespedes', label: 'Huéspedes', Icon: Users },
     { path: '/admin/aseo',      label: 'Aseo',      Icon: Sparkles },
+    { path: '/admin/compras',   label: 'Compras',   Icon: FileArchive },
     { path: '/admin/claves',    label: 'Claves',    Icon: KeyRound },
   ],
   aseo: [

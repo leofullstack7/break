@@ -15,6 +15,7 @@ const HuespedDet = lazy(() => import('@/pages/admin/HuespedDetalle'))
 const Aseo       = lazy(() => import('@/pages/admin/Aseo'))
 const Lavanderia = lazy(() => import('@/pages/admin/Lavanderia'))
 const Finanzas   = lazy(() => import('@/pages/admin/Finanzas'))
+const Compras    = lazy(() => import('@/pages/admin/Compras'))
 const Marketing  = lazy(() => import('@/pages/admin/Marketing'))
 const Usuarios   = lazy(() => import('@/pages/admin/Usuarios'))
 const Claves     = lazy(() => import('@/pages/admin/Claves'))
@@ -87,6 +88,11 @@ export default function App() {
           <Route path="/admin/finanzas" element={
             <AdminRoute roles={['gerente']}>
               <Finanzas />
+            </AdminRoute>
+          } />
+          <Route path="/admin/compras" element={
+            <AdminRoute roles={['gerente', 'recepcion']}>
+              <Compras />
             </AdminRoute>
           } />
           <Route path="/admin/marketing" element={

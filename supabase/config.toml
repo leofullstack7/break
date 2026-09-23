@@ -105,3 +105,13 @@ verify_jwt = true
 # Chat huésped: el QR no tiene sesión. Validamos token en la función.
 [functions.chat-media]
 verify_jwt = false
+
+# Bandeja compras → Siigo (upload manual JWT; email webhook público con firma Resend)
+[functions.compras-upload]
+verify_jwt = true
+
+[functions.siigo-sync-compra]
+verify_jwt = true
+
+[functions.compras-email-webhook]
+verify_jwt = false

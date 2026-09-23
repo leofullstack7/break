@@ -80,6 +80,48 @@ export interface SiigoInvoiceResponse {
   [key: string]: unknown;
 }
 
+/** Payload mínimo para POST /v1/purchases (factura de compra). */
+export interface SiigoPurchaseItem {
+  type: "Product" | "FixedAsset" | "Account";
+  code: string;
+  description?: string;
+  quantity: number;
+  price: number;
+  discount?: number;
+  taxes?: Array<{ id: number }>;
+}
+
+export interface SiigoPurchasePayment {
+  id: number;
+  value: number;
+  due_date?: string;
+  name?: string;
+}
+
+export interface SiigoPurchasePayload {
+  document: { id: number };
+  date: string;
+  supplier: { identification: string; branch_office?: number };
+  provider_invoice?: { prefix?: string; number: string };
+  items: SiigoPurchaseItem[];
+  payments: SiigoPurchasePayment[];
+  observations?: string;
+  discount_type?: "Percentage" | "Value";
+  cost_center?: number;
+  currency?: { code: string; exchange_rate: number };
+}
+
+export interface SiigoPurchaseResponse {
+  id: string;
+  document?: { id: number };
+  number?: number;
+  name?: string;
+  date?: string;
+  total?: number;
+  provider_invoice?: { prefix?: string; number?: string };
+  [key: string]: unknown;
+}
+
 export interface SiigoApiError {
   Status: number;
   Errors: Array<{ Code: string; Message: string; Params?: string[]; Detail?: string }>;

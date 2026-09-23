@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
@@ -8,12 +8,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      // manifest está en public/manifest.webmanifest — no generarlo desde aquí
       manifest: false,
       workbox: {
-        // Cachear assets estáticos agresivamente
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // No cachear llamadas a Supabase — siempre fresh
         navigateFallbackDenylist: [/^\/api/, /^\/rest/, /^\/auth/],
         runtimeCaching: [
           {
@@ -30,7 +27,6 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      // @ apunta a /src — todos los agentes usan este alias
       '@': path.resolve(__dirname, './src'),
     },
   },
@@ -39,11 +35,9 @@ export default defineConfig({
     open: true,
   },
   build: {
-    // Alerta si un chunk supera 500KB
     chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
-        // Separar Three.js en su propio chunk (es muy pesado)
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-supabase': ['@supabase/supabase-js'],
@@ -52,5 +46,10 @@ export default defineConfig({
         },
       },
     },
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
   },
 })
