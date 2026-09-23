@@ -34,6 +34,11 @@ Supabase (siigo_factura_id, CUFE, PDF, siigo_estado)
 | `pxsol-webhook` | no | Placeholder 501 — PxSol no documenta webhooks |
 | `siigo-auth` | sí | Renueva / chequea token Siigo (24h) |
 | `siigo-sync-factura` | sí | Crea factura DIAN por voucher pendiente |
+| `compras-email-webhook` | no | Correo inbound → bandeja compras (asunto facturación) |
+| `compras-upload` | sí | Upload manual ZIP/XML DIAN |
+| `siigo-sync-compra` | sí | Parsea ZIP → POST /v1/purchases |
+
+Ver también `docs/integraciones-compras-siigo.md`.
 
 Helpers en `supabase/functions/_shared/`: `pxsol-client.ts`, `siigo-client.ts`, `factura-mapper.ts`.
 

@@ -12,6 +12,8 @@ import type {
   SiigoCustomerPayload,
   SiigoInvoicePayload,
   SiigoInvoiceResponse,
+  SiigoPurchasePayload,
+  SiigoPurchaseResponse,
 } from "./siigo-types.ts";
 
 const SIIGO_BASE_URL = "https://api.siigo.com";
@@ -150,3 +152,21 @@ export async function createInvoice(
     idempotencyKey,
   });
 }
+
+/**
+ * Crea una factura de compra / gasto en Siigo.
+ * `idempotencyKey` recomendado: CUFE o prefijo+número del proveedor.
+ */
+export async function createPurchase(
+  payload: SiigoPurchasePayload,
+  idempotencyKey: string,
+): Promise<SiigoPurchaseResponse> {
+  return siigoFetch<SiigoPurchaseResponse>("/v1/purchases", {
+    method: "POST",
+    body: payload,
+    idempotencyKey,
+  });
+}
+
+/** Alias semántico: en Siigo el proveedor es un tercero (customer). */
+export const ensureSupplier = ensureCustomer;
