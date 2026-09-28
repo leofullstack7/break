@@ -4,6 +4,10 @@ import { AnimatePresence } from 'framer-motion'
 import { RouteGuard } from '@/components/auth/RouteGuard'
 import { AdminLayout } from '@/components/layout/AdminLayout'
 import { PageLoader } from '@/components/ui/PageLoader'
+import { ROLES_GERENCIALES } from '@/lib/roles'
+import type { RolUsuario } from '@/types/database.types'
+
+const G = ROLES_GERENCIALES
 
 const Login = lazy(() => import('@/pages/auth/Login'))
 
@@ -15,10 +19,12 @@ const HuespedDet = lazy(() => import('@/pages/admin/HuespedDetalle'))
 const Aseo       = lazy(() => import('@/pages/admin/Aseo'))
 const Lavanderia = lazy(() => import('@/pages/admin/Lavanderia'))
 const Finanzas   = lazy(() => import('@/pages/admin/Finanzas'))
+const Compras    = lazy(() => import('@/pages/admin/Compras'))
 const Marketing  = lazy(() => import('@/pages/admin/Marketing'))
 const Usuarios   = lazy(() => import('@/pages/admin/Usuarios'))
 const Claves     = lazy(() => import('@/pages/admin/Claves'))
 const Conversaciones = lazy(() => import('@/pages/admin/Conversaciones'))
+const Objetivos = lazy(() => import('@/pages/admin/Objetivos'))
 
 // ── ARCHIVO: sitio público + portal huésped (apartados, no son la entrada) ──
 const Landing      = lazy(() => import('@/pages/public/Landing'))
@@ -31,7 +37,7 @@ const HuespedReserva = lazy(() => import('@/pages/huesped/MiReserva'))
 const ChatHabitacion = lazy(() => import('@/pages/public/ChatHabitacion'))
 
 function AdminRoute({ roles, children }: {
-  roles: ('gerente' | 'recepcion' | 'aseo' | 'marketing')[]
+  roles: RolUsuario[]
   children: React.ReactNode
 }) {
   return (
@@ -55,57 +61,67 @@ export default function App() {
 
           {/* Panel admin */}
           <Route path="/admin" element={
-            <AdminRoute roles={['gerente', 'recepcion', 'aseo', 'marketing']}>
+            <AdminRoute roles={[...G, 'recepcion', 'aseo', 'marketing']}>
               <Dashboard />
             </AdminRoute>
           } />
+          <Route path="/admin/objetivos" element={
+            <AdminRoute roles={[...G]}>
+              <Objetivos />
+            </AdminRoute>
+          } />
           <Route path="/admin/reservas" element={
-            <AdminRoute roles={['gerente', 'recepcion']}>
+            <AdminRoute roles={[...G, 'recepcion']}>
               <Reservas />
             </AdminRoute>
           } />
           <Route path="/admin/huespedes" element={
-            <AdminRoute roles={['gerente', 'recepcion', 'marketing']}>
+            <AdminRoute roles={[...G, 'recepcion', 'marketing']}>
               <Huespedes />
             </AdminRoute>
           } />
           <Route path="/admin/huespedes/:id" element={
-            <AdminRoute roles={['gerente', 'recepcion', 'marketing']}>
+            <AdminRoute roles={[...G, 'recepcion', 'marketing']}>
               <HuespedDet />
             </AdminRoute>
           } />
           <Route path="/admin/aseo" element={
-            <AdminRoute roles={['gerente', 'aseo', 'recepcion']}>
+            <AdminRoute roles={[...G, 'aseo', 'recepcion']}>
               <Aseo />
             </AdminRoute>
           } />
           <Route path="/admin/lavanderia" element={
-            <AdminRoute roles={['gerente', 'aseo']}>
+            <AdminRoute roles={[...G, 'aseo']}>
               <Lavanderia />
             </AdminRoute>
           } />
           <Route path="/admin/finanzas" element={
-            <AdminRoute roles={['gerente']}>
+            <AdminRoute roles={[...G]}>
               <Finanzas />
             </AdminRoute>
           } />
+          <Route path="/admin/compras" element={
+            <AdminRoute roles={[...G, 'recepcion']}>
+              <Compras />
+            </AdminRoute>
+          } />
           <Route path="/admin/marketing" element={
-            <AdminRoute roles={['gerente', 'marketing']}>
+            <AdminRoute roles={[...G, 'marketing']}>
               <Marketing />
             </AdminRoute>
           } />
           <Route path="/admin/usuarios" element={
-            <AdminRoute roles={['gerente']}>
+            <AdminRoute roles={[...G]}>
               <Usuarios />
             </AdminRoute>
           } />
           <Route path="/admin/claves" element={
-            <AdminRoute roles={['gerente', 'recepcion']}>
+            <AdminRoute roles={[...G, 'recepcion']}>
               <Claves />
             </AdminRoute>
           } />
           <Route path="/admin/conversaciones" element={
-            <AdminRoute roles={['gerente', 'recepcion']}>
+            <AdminRoute roles={[...G, 'recepcion']}>
               <Conversaciones />
             </AdminRoute>
           } />

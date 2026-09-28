@@ -1,15 +1,19 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, CalendarDays, Users, Sparkles, Megaphone, TrendingUp } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Users, Sparkles, Megaphone, Target } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import type { RolUsuario } from '@/types/database.types'
 
+const BOTTOM_GERENTE = [
+  { path: '/admin',           label: 'Inicio',    Icon: LayoutDashboard, end: true },
+  { path: '/admin/objetivos', label: 'Objetivos', Icon: Target },
+  { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },
+  { path: '/admin/huespedes', label: 'Huéspedes', Icon: Users },
+]
+
 const BOTTOM_POR_ROL: Record<RolUsuario, { path: string; label: string; Icon: React.ElementType; end?: boolean }[]> = {
-  gerente: [
-    { path: '/admin',           label: 'Inicio',    Icon: LayoutDashboard, end: true },
-    { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },
-    { path: '/admin/huespedes', label: 'Huéspedes', Icon: Users },
-    { path: '/admin/finanzas',  label: 'Finanzas',  Icon: TrendingUp },
-  ],
+  gerente: BOTTOM_GERENTE,
+  ti: BOTTOM_GERENTE,
+  administracion: BOTTOM_GERENTE,
   recepcion: [
     { path: '/admin',           label: 'Inicio',    Icon: LayoutDashboard, end: true },
     { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },

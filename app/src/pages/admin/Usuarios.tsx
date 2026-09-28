@@ -17,7 +17,9 @@ interface UsuarioRow {
 }
 
 const ROLES: { value: string; label: string; desc: string }[] = [
-  { value: 'gerente',   label: 'Gerente',    desc: 'Acceso total al sistema' },
+  { value: 'gerente',        label: 'Gerente',         desc: 'Acceso total + Hormiga' },
+  { value: 'ti',             label: 'IT Break',        desc: 'Mismo panel gerencial, por ahora' },
+  { value: 'administracion', label: 'Administración',  desc: 'Mismo panel gerencial, por ahora' },
   { value: 'recepcion', label: 'Recepción',  desc: 'Reservas, huéspedes, aseo' },
   { value: 'aseo',      label: 'Aseo',       desc: 'Limpieza y lavandería' },
   { value: 'marketing', label: 'Marketing',  desc: 'Contactos, mailing, WhatsApp' },
@@ -26,6 +28,8 @@ const ROLES: { value: string; label: string; desc: string }[] = [
 
 const ROL_BADGE: Record<string, string> = {
   gerente:   'bg-dorado/15 border-dorado/30 text-dorado',
+  ti:        'bg-sky-900/30 border-sky-700/30 text-sky-300',
+  administracion: 'bg-amber-900/30 border-amber-700/30 text-amber-300',
   recepcion: 'bg-blue-900/30 border-blue-700/30 text-blue-300',
   aseo:      'bg-green-900/30 border-green-700/30 text-green-300',
   marketing: 'bg-purple-900/30 border-purple-700/30 text-purple-300',

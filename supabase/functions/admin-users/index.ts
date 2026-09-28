@@ -13,7 +13,7 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-const ROLES_VALIDOS = ['gerente', 'recepcion', 'aseo', 'marketing', 'huesped']
+const ROLES_VALIDOS = ['gerente', 'ti', 'administracion', 'recepcion', 'aseo', 'marketing', 'huesped']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -33,8 +33,8 @@ Deno.serve(async (req) => {
     .eq('id', user.id)
     .single()
 
-  if (perfil?.rol !== 'gerente') {
-    return respuesta(403, { error: 'Solo el gerente puede gestionar usuarios' })
+  if (!['gerente', 'ti', 'administracion'].includes(perfil?.rol ?? '')) {
+    return respuesta(403, { error: 'Solo gerencia, IT o Administración pueden gestionar usuarios' })
   }
 
   switch (req.method) {

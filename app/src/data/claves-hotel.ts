@@ -134,6 +134,22 @@ export const CLAVES_HOTEL: ClaveHotel[] = [
     categoria: 'cuentas',
   },
   {
+    id: 'it-break',
+    nombre: 'Panel IT BREAK',
+    usuario: 'it@breakmanizales.com',
+    clave: 'BreakIT.5340*',
+    notas: 'Rol TI. Mismo acceso gerencial por ahora. Asistente Byte.',
+    categoria: 'cuentas',
+  },
+  {
+    id: 'admin-break',
+    nombre: 'Panel Administración',
+    usuario: 'administracion@breakmanizales.com',
+    clave: 'BreakAdm.5340*',
+    notas: 'Rol Administración. Mismo acceso gerencial por ahora.',
+    categoria: 'cuentas',
+  },
+  {
     id: 'icloud',
     nombre: 'iCloud',
     usuario: 'hotelbreakmanizales@gmail.com',

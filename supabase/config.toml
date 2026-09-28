@@ -105,3 +105,19 @@ verify_jwt = true
 # Chat huésped: el QR no tiene sesión. Validamos token en la función.
 [functions.chat-media]
 verify_jwt = false
+
+# Correo inbound de facturas de compra (Resend). Firma Svix, sin JWT.
+[functions.compras-email-webhook]
+verify_jwt = false
+
+[functions.compras-upload]
+verify_jwt = true
+
+[functions.siigo-sync-compra]
+verify_jwt = true
+
+[functions.asistente-equipo]
+verify_jwt = true
+
+[functions.seed-trazabilidad]
+verify_jwt = false

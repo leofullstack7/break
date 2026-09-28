@@ -4,9 +4,8 @@ import { motion } from 'framer-motion'
 import { Eye, EyeOff, Lock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/store/authStore'
+import { esStaff } from '@/lib/roles'
 import { PageLoader } from '@/components/ui/PageLoader'
-
-const ROLES_STAFF = new Set(['gerente', 'recepcion', 'aseo', 'marketing'])
 
 export default function Login() {
   const navigate  = useNavigate()
@@ -23,7 +22,7 @@ export default function Login() {
   // Ya autenticado como staff → entrar al panel
   useEffect(() => {
     if (!inicializado) return
-    if (user && rol && ROLES_STAFF.has(rol)) {
+    if (user && rol && esStaff(rol)) {
       navigate(fromState?.startsWith('/admin') ? fromState : '/admin', { replace: true })
     }
   }, [inicializado, user, rol, fromState, navigate])
@@ -52,7 +51,7 @@ export default function Login() {
 
     const rolUsuario = perfil?.rol ?? 'huesped'
 
-    if (!ROLES_STAFF.has(rolUsuario)) {
+    if (!esStaff(rolUsuario)) {
       await supabase.auth.signOut()
       setError('Esta plataforma es solo para el equipo Break.')
       setLoading(false)
@@ -64,7 +63,7 @@ export default function Login() {
 
   if (!inicializado) return <PageLoader />
 
-  if (user && rol && ROLES_STAFF.has(rol)) return <PageLoader />
+  if (user && rol && esStaff(rol)) return <PageLoader />
 
   return (
     <main className="relative min-h-dvh flex items-center justify-center overflow-hidden">

@@ -2,7 +2,7 @@
 // Nova los mantiene sincronizados con database.md
 // Ariel los usa en todos los componentes y hooks
 
-export type RolUsuario = 'gerente' | 'recepcion' | 'aseo' | 'marketing' | 'huesped'
+export type RolUsuario = 'gerente' | 'ti' | 'administracion' | 'recepcion' | 'aseo' | 'marketing' | 'huesped'
 
 export type EstadoHabitacion = 'disponible' | 'ocupada' | 'aseo' | 'mantenimiento'
 
@@ -168,6 +168,71 @@ export interface Usuario {
   activo: boolean
   created_at: string
   updated_at: string
+}
+
+export type AreaObjetivo = 'ti' | 'administracion' | 'gerencia'
+export type EstadoObjetivo = 'abierto' | 'en_curso' | 'cumplido' | 'archivado'
+export type EstadoTarea = 'pendiente' | 'en_curso' | 'completa'
+
+export interface Objetivo {
+  id: string
+  titulo: string
+  descripcion: string | null
+  area: AreaObjetivo
+  estado: EstadoObjetivo
+  owner_id: string
+  fecha_objetivo: string | null
+  cumplido_at: string | null
+  created_at: string
+  updated_at: string
+  owner?: Pick<Usuario, 'id' | 'nombre' | 'rol' | 'email'> | null
+  tareas?: Tarea[]
+  adjuntos?: TrazabilidadAdjunto[]
+}
+
+export interface Tarea {
+  id: string
+  objetivo_id: string
+  titulo: string
+  descripcion: string | null
+  estado: EstadoTarea
+  asignado_id: string | null
+  created_by: string | null
+  orden: number
+  completada_at: string | null
+  created_at: string
+  updated_at: string
+  adjuntos?: TrazabilidadAdjunto[]
+}
+
+export interface TrazabilidadAdjunto {
+  id: string
+  objetivo_id: string | null
+  tarea_id: string | null
+  nombre: string
+  mime: string
+  path: string
+  bytes: number | null
+  subido_por: string | null
+  created_at: string
+}
+
+export interface Zumbido {
+  id: string
+  de_id: string
+  para_id: string
+  mensaje: string | null
+  leido_at: string | null
+  created_at: string
+}
+
+export interface AsistenteMensaje {
+  id: string
+  rama: 'gerente' | 'ti'
+  user_id: string
+  rol: 'user' | 'assistant'
+  contenido: string
+  created_at: string
 }
 
 // ── VISTAS ──────────────────────────────────────────────────────

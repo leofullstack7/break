@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Users, Sparkles,
-  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog, KeyRound,
+  Shirt, TrendingUp, Megaphone, LogOut, X, UserCog, KeyRound, FileText, Target,
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { labelRol } from '@/lib/roles'
 import type { RolUsuario } from '@/types/database.types'
 
 interface NavItem {
@@ -12,23 +13,30 @@ interface NavItem {
   Icon: React.ElementType
 }
 
+const NAV_GERENTE: NavItem[] = [
+  { path: '/admin',             label: 'Dashboard',   Icon: LayoutDashboard },
+  { path: '/admin/objetivos',   label: 'Objetivos',   Icon: Target },
+  { path: '/admin/reservas',    label: 'Reservas',    Icon: CalendarDays },
+  { path: '/admin/huespedes',   label: 'Huéspedes',   Icon: Users },
+  { path: '/admin/aseo',        label: 'Aseo',        Icon: Sparkles },
+  { path: '/admin/lavanderia',  label: 'Lavandería',  Icon: Shirt },
+  { path: '/admin/finanzas',    label: 'Finanzas',    Icon: TrendingUp },
+  { path: '/admin/compras',     label: 'Compras',     Icon: FileText },
+  { path: '/admin/marketing',   label: 'Marketing',   Icon: Megaphone },
+  { path: '/admin/usuarios',    label: 'Usuarios',    Icon: UserCog },
+  { path: '/admin/claves',      label: 'Claves',      Icon: KeyRound },
+]
+
 const NAV_POR_ROL: Record<RolUsuario, NavItem[]> = {
-  gerente: [
-    { path: '/admin',             label: 'Dashboard',   Icon: LayoutDashboard },
-    { path: '/admin/reservas',    label: 'Reservas',    Icon: CalendarDays },
-    { path: '/admin/huespedes',   label: 'Huéspedes',   Icon: Users },
-    { path: '/admin/aseo',        label: 'Aseo',        Icon: Sparkles },
-    { path: '/admin/lavanderia',  label: 'Lavandería',  Icon: Shirt },
-    { path: '/admin/finanzas',    label: 'Finanzas',    Icon: TrendingUp },
-    { path: '/admin/marketing',   label: 'Marketing',   Icon: Megaphone },
-    { path: '/admin/usuarios',    label: 'Usuarios',    Icon: UserCog },
-    { path: '/admin/claves',      label: 'Claves',      Icon: KeyRound },
-  ],
+  gerente: NAV_GERENTE,
+  ti: NAV_GERENTE,
+  administracion: NAV_GERENTE,
   recepcion: [
     { path: '/admin',           label: 'Dashboard', Icon: LayoutDashboard },
     { path: '/admin/reservas',  label: 'Reservas',  Icon: CalendarDays },
     { path: '/admin/huespedes', label: 'Huéspedes', Icon: Users },
     { path: '/admin/aseo',      label: 'Aseo',      Icon: Sparkles },
+    { path: '/admin/compras',   label: 'Compras',   Icon: FileText },
     { path: '/admin/claves',    label: 'Claves',    Icon: KeyRound },
   ],
   aseo: [
@@ -122,7 +130,7 @@ export function Sidebar({ onClose }: SidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="text-body-sm font-semibold text-blanco-roto/90 truncate leading-tight">{nombre ?? 'Usuario'}</p>
-            <p className="text-body-xs text-blanco-roto/30 capitalize leading-tight">{rol ?? ''}</p>
+            <p className="text-body-xs text-blanco-roto/30 leading-tight">{labelRol(rol)}</p>
           </div>
         </div>
 

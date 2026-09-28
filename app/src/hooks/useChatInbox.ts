@@ -9,7 +9,7 @@ import type { ChatMensaje } from '@/types/database.types'
 
 export function useChatInbox(opts?: { escuchar?: boolean }) {
   const { rol } = useAuthStore()
-  const habilitado = rol === 'gerente' || rol === 'recepcion' || rol === 'marketing'
+  const habilitado = rol === 'gerente' || rol === 'ti' || rol === 'administracion' || rol === 'recepcion' || rol === 'marketing'
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const vistoRef = useRef<Set<string>>(new Set())

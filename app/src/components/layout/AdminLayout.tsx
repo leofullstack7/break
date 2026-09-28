@@ -5,14 +5,18 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { BottomNav } from './BottomNav'
 import { useChatInbox } from '@/hooks/useChatInbox'
+import { AsistenteFlotante } from '@/components/asistente/AsistenteFlotante'
+import { ZumbidoOverlay } from '@/hooks/useZumbido'
 
 const TITULOS: Record<string, string> = {
   '/admin':             'Dashboard',
+  '/admin/objetivos':   'Objetivos',
   '/admin/reservas':    'Reservas',
   '/admin/huespedes':   'Huéspedes',
   '/admin/aseo':        'Aseo',
   '/admin/lavanderia':  'Lavandería',
   '/admin/finanzas':    'Finanzas',
+  '/admin/compras':     'Compras Siigo',
   '/admin/marketing':   'Marketing',
   '/admin/usuarios':    'Usuarios',
   '/admin/claves':      'Claves',
@@ -77,6 +81,8 @@ export function AdminLayout({ children }: AdminLayoutProps) {
       </div>
 
       <BottomNav />
+      <AsistenteFlotante />
+      <ZumbidoOverlay />
     </div>
   )
 }
