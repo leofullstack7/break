@@ -75,6 +75,10 @@ verify_jwt = true
 [functions.pxsol-ocupacion-sync]
 verify_jwt = true
 
+# Sync contactos/huéspedes desde PxSol → huespedes (botón CRM o cron)
+[functions.pxsol-contactos-sync]
+verify_jwt = true
+
 [functions.chat-bot]
 verify_jwt = true
 

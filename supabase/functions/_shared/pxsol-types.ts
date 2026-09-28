@@ -140,3 +140,63 @@ export interface PxSolBooking {
   taxes: number;
   [key: string]: unknown;
 }
+
+/** Detalle de huésped en listados /booking/list (ocupación + CRM). */
+export interface PxSolBookingGuestDetails {
+  name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  document_number?: string | null;
+  document_type?: string | null;
+  pax_id?: number | string | null;
+  [key: string]: unknown;
+}
+
+export interface PxSolBookingPhysicalRoom {
+  name?: string | null;
+  category_code?: string | null;
+  category_id?: string | number | null;
+  assigned?: boolean;
+  [key: string]: unknown;
+}
+
+/**
+ * Ítem de GET /booking/list — usado por pxsol-ocupacion-sync y
+ * pxsol-contactos-sync. Campos opcionales porque PxSol varía el payload.
+ */
+export interface PxSolBookingListItem {
+  booking_id: number | string;
+  check_in: string;
+  check_out: string;
+  reservation_state?: string;
+  guest_details?: PxSolBookingGuestDetails | null;
+  physical_rooms?: PxSolBookingPhysicalRoom[];
+  subtotal?: number;
+  taxes?: number;
+  origin?: string;
+  source?: string;
+  [key: string]: unknown;
+}
+
+export interface PxSolPendingBooking {
+  booking_id: number | string;
+  checkin: string;
+  checkout: string;
+  status: string;
+  [key: string]: unknown;
+}
+
+export interface PxSolPhysicalRoom {
+  id?: number | string;
+  name?: string | null;
+  categoryId: string;
+  [key: string]: unknown;
+}
+
+export interface PxSolDayAvailability {
+  roomId: string;
+  quantity: number;
+  closed?: boolean;
+  [key: string]: unknown;
+}
