@@ -179,6 +179,15 @@ export async function urlAdjunto(path: string): Promise<string | null> {
   return data.signedUrl
 }
 
+/** Baja el archivo con la sesión (evita CORS / iframe bloqueado). */
+export async function descargarAdjunto(path: string): Promise<Blob | null> {
+  const { data, error } = await supabase.storage
+    .from('trazabilidad')
+    .download(path)
+  if (error || !data) return null
+  return data
+}
+
 export async function enviarZumbido(paraId: string, mensaje?: string): Promise<Zumbido> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Sin sesión')
@@ -213,7 +222,10 @@ export async function fetchAsistente(rama: 'gerente' | 'ti'): Promise<AsistenteM
   return (data ?? []) as AsistenteMensaje[]
 }
 
-export async function preguntarAsistente(rama: 'gerente' | 'ti', mensaje: string): Promise<string> {
+export async function preguntarAsistente(
+  rama: 'gerente' | 'ti',
+  mensaje: string,
+): Promise<{ respuesta: string; pdf?: { nombre: string; path: string; mime: string } }> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('Sin sesión')
   const res = await fetch(`${supabaseUrl}/functions/v1/asistente-equipo`, {
@@ -227,5 +239,8 @@ export async function preguntarAsistente(rama: 'gerente' | 'ti', mensaje: string
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok || !body.ok) throw new Error(body.error ?? `HTTP ${res.status}`)
-  return String(body.respuesta ?? '')
+  return {
+    respuesta: String(body.respuesta ?? ''),
+    pdf: body.pdf ?? undefined,
+  }
 }

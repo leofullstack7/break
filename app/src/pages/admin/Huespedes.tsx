@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { ChevronRight, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { SearchInput } from '@/components/ui/SearchInput'
+import { PaginacionBar } from '@/components/ui/PaginacionBar'
 import type { Huesped } from '@/types/database.types'
+
+const PAGE_SIZE = 20
 
 interface HuespedConVisitas extends Huesped {
   total_visitas: number
@@ -37,6 +40,7 @@ export default function Huespedes() {
   const navigate  = useNavigate()
   const [busqueda, setBusqueda] = useState('')
   const [filtroNac, setFiltroNac] = useState('')
+  const [pagina, setPagina] = useState(1)
 
   const { data: huespedes = [], isLoading } = useQuery({
     queryKey: ['huespedes', busqueda],
@@ -47,6 +51,11 @@ export default function Huespedes() {
   const filtrados = filtroNac
     ? huespedes.filter(h => h.nacionalidad?.toLowerCase().includes(filtroNac.toLowerCase()))
     : huespedes
+
+  const totalPags = Math.ceil(filtrados.length / PAGE_SIZE) || 1
+  const pag = Math.min(pagina, totalPags)
+  const inicio = (pag - 1) * PAGE_SIZE
+  const items = useMemo(() => filtrados.slice(inicio, inicio + PAGE_SIZE), [filtrados, inicio])
 
   const extranjeros = huespedes.filter(h => h.nacionalidad !== 'colombiana').length
 
@@ -73,13 +82,13 @@ export default function Huespedes() {
       <div className="flex gap-3 flex-col sm:flex-row">
         <SearchInput
           value={busqueda}
-          onChange={setBusqueda}
+          onChange={v => { setBusqueda(v); setPagina(1) }}
           placeholder="Buscar por nombre, celular o correo..."
           className="flex-1"
         />
         <select
           value={filtroNac}
-          onChange={e => setFiltroNac(e.target.value)}
+          onChange={e => { setFiltroNac(e.target.value); setPagina(1) }}
           className="bg-negro-profundo border border-white/10 rounded-xl px-3 py-2.5 text-body-sm text-blanco-roto focus:outline-none focus:border-dorado/50 sm:w-48"
         >
           <option value="">Todos los países</option>
@@ -128,7 +137,7 @@ export default function Huespedes() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filtrados.map(h => (
+                {items.map(h => (
                   <tr
                     key={h.id}
                     onClick={() => navigate(`/admin/huespedes/${h.id}`)}
@@ -160,7 +169,7 @@ export default function Huespedes() {
 
           {/* Mobile: lista */}
           <div className="lg:hidden space-y-2">
-            {filtrados.map(h => (
+            {items.map(h => (
               <button
                 key={h.id}
                 onClick={() => navigate(`/admin/huespedes/${h.id}`)}
@@ -181,9 +190,14 @@ export default function Huespedes() {
             ))}
           </div>
 
-          <p className="text-body-xs text-blanco-roto/30 text-center">
-            Mostrando {filtrados.length} huéspedes
-          </p>
+          <PaginacionBar
+            pagina={pag}
+            totalPags={totalPags}
+            desde={filtrados.length ? inicio + 1 : 0}
+            hasta={Math.min(inicio + PAGE_SIZE, filtrados.length)}
+            total={filtrados.length}
+            onPagina={setPagina}
+          />
         </>
       )}
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Send, X, Vibrate, Loader2 } from 'lucide-react'
+import { FileText, Loader2, Send, Vibrate, X } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/authStore'
 import { esGerencial } from '@/lib/roles'
@@ -10,6 +11,7 @@ import {
   fetchEquipoGerencial,
   preguntarAsistente,
 } from '@/lib/trazabilidad'
+import { VisorAdjunto, type AdjuntoVista } from '@/components/objetivos/VisorAdjunto'
 import { ChipTiIcon, HormigaIcon } from './HormigaIcon'
 
 export function AsistenteFlotante() {
@@ -21,9 +23,16 @@ export function AsistenteFlotante() {
 }
 
 function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
+  const loc = useLocation()
+  const listaLarga = loc.pathname.startsWith('/admin/reservas')
+    || loc.pathname.startsWith('/admin/huespedes')
   const [abierto, setAbierto] = useState(false)
   const [texto, setTexto] = useState('')
   const [zumbando, setZumbando] = useState<string | null>(null)
+  const [pendiente, setPendiente] = useState<string | null>(null)
+  const [errorChat, setErrorChat] = useState<string | null>(null)
+  const [pdfChip, setPdfChip] = useState<AdjuntoVista | null>(null)
+  const [preview, setPreview] = useState<AdjuntoVista | null>(null)
   const fondo = useRef<HTMLDivElement>(null)
   const qc = useQueryClient()
   const esHormiga = rama === 'gerente'
@@ -42,22 +51,32 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
 
   const preguntar = useMutation({
     mutationFn: (m: string) => preguntarAsistente(rama, m),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setPendiente(null)
+      setErrorChat(null)
+      if (data.pdf) setPdfChip(data.pdf)
       void qc.invalidateQueries({ queryKey: ['asistente', rama] })
+      void qc.invalidateQueries({ queryKey: ['objetivos'] })
+    },
+    onError: (err: Error) => {
+      setErrorChat(err.message || 'No pude contestarte. Intenta de nuevo.')
     },
   })
 
   useEffect(() => {
     const el = fondo.current
     if (el) el.scrollTop = el.scrollHeight
-  }, [historial, preguntar.isPending, abierto])
+  }, [historial, preguntar.isPending, abierto, pendiente, pdfChip])
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault()
     const m = texto.trim()
     if (!m || preguntar.isPending) return
     setTexto('')
-    await preguntar.mutateAsync(m)
+    setPendiente(m)
+    setErrorChat(null)
+    setPdfChip(null)
+    await preguntar.mutateAsync(m).catch(() => undefined)
   }
 
   const empleados = equipo.filter(u => u.rol === 'ti' || u.rol === 'administracion')
@@ -67,7 +86,11 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
       <motion.button
         type="button"
         onClick={() => setAbierto(true)}
-        className="fixed z-[60] right-4 bottom-[5.5rem] lg:bottom-6 w-14 h-14 rounded-2xl bg-negro-profundo border border-dorado/40 flex items-center justify-center"
+        className={`fixed z-[60] right-4 w-14 h-14 rounded-2xl bg-negro-profundo border border-dorado/40 flex items-center justify-center ${
+          listaLarga
+            ? 'bottom-[calc(8.75rem+env(safe-area-inset-bottom,0px))] lg:bottom-[4.5rem]'
+            : 'bottom-[5.5rem] lg:bottom-6'
+        }`}
         whileTap={{ scale: 0.92 }}
         animate={{ boxShadow: ['0 0 0 0 rgba(201,162,39,0.0)', '0 0 0 10px rgba(201,162,39,0.08)', '0 0 0 0 rgba(201,162,39,0.0)'] }}
         transition={{ duration: 2.4, repeat: Infinity }}
@@ -100,7 +123,7 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
                   </p>
                   <p className="text-body-xs text-blanco-roto/40">
                     {esHormiga
-                      ? 'Asistente de gerencia · equipo, PxSol y tablero'
+                      ? 'Tu parce de gerencia · tablero, PxSol y PDFs'
                       : 'Asistente IT · consultas PxSol'}
                   </p>
                 </div>
@@ -144,17 +167,17 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
               )}
 
               <div ref={fondo} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-                {historial.length === 0 && (
+                {historial.length === 0 && !pendiente && (
                   <p className="text-body-sm text-blanco-roto/40 leading-relaxed">
                     {esHormiga
-                      ? 'Pregúntame por objetivos, tareas de IT, ocupación o un huésped. Me alimento de lo que el equipo sube al tablero.'
+                      ? 'Pregúntame cómo va IT, un número de habitación o “hazme el PDF de septiembre”. Te hablo claro, con los números del tablero.'
                       : 'Pregúntame por habitaciones, reservas o estados en PxSol. Esta rama no mezcla el tablero de gerencia.'}
                   </p>
                 )}
                 {historial.map(m => (
                   <div
                     key={m.id}
-                    className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-body-sm leading-relaxed ${
+                    className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-body-sm leading-relaxed whitespace-pre-wrap ${
                       m.rol === 'user'
                         ? 'ml-auto bg-dorado/15 text-blanco-roto'
                         : 'bg-white/[0.04] text-blanco-roto/85'
@@ -163,10 +186,30 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
                     {m.contenido}
                   </div>
                 ))}
+                {pendiente && (
+                  <div className="max-w-[90%] ml-auto rounded-2xl px-3.5 py-2.5 text-body-sm bg-dorado/15 text-blanco-roto">
+                    {pendiente}
+                  </div>
+                )}
                 {preguntar.isPending && (
                   <div className="bg-white/[0.04] rounded-2xl px-3.5 py-2.5 text-body-xs text-blanco-roto/40 w-fit">
-                    Pensando…
+                    Dame un segundo…
                   </div>
+                )}
+                {errorChat && (
+                  <div className="bg-red-900/20 border border-red-700/30 rounded-2xl px-3.5 py-2.5 text-body-xs text-red-300">
+                    {errorChat}
+                  </div>
+                )}
+                {pdfChip && (
+                  <button
+                    type="button"
+                    onClick={() => setPreview(pdfChip)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-dorado/15 border border-dorado/30 text-dorado text-body-xs"
+                  >
+                    <FileText size={14} />
+                    Ver {pdfChip.nombre}
+                  </button>
                 )}
               </div>
 
@@ -174,7 +217,7 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
                 <input
                   value={texto}
                   onChange={e => setTexto(e.target.value)}
-                  placeholder={esHormiga ? 'Pregúntale a Hormiga…' : 'Pregúntale a Byte por PxSol…'}
+                  placeholder={esHormiga ? 'Ej: PDF de avances de septiembre…' : 'Pregúntale a Byte por PxSol…'}
                   className="flex-1 bg-negro-absoluto/50 border border-white/10 rounded-xl px-3 py-3 text-body-sm text-blanco-roto focus:outline-none focus:border-dorado/40"
                 />
                 <button
@@ -190,6 +233,8 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <VisorAdjunto adjunto={preview} onClose={() => setPreview(null)} />
     </>
   )
 }

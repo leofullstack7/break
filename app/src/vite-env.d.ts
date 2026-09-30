@@ -1,5 +1,10 @@
 /// <reference types="vite/client" />
 
+declare module 'pdfjs-dist/build/pdf.worker.min.mjs?url' {
+  const src: string
+  export default src
+}
+
 interface ImportMetaEnv {
   readonly VITE_SUPABASE_URL: string
   readonly VITE_SUPABASE_ANON_KEY: string
@@ -11,4 +16,8 @@ interface ImportMetaEnv {
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
+}
+
+interface WindowEventMap {
+  'vite:preloadError': Event
 }

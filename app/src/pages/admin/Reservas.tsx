@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { CalendarDays, ChevronRight, ChevronLeft, Eye, Plus, Search, X, Pencil, Trash2, AlertTriangle, FileText } from 'lucide-react'
+import { CalendarDays, Eye, Plus, Search, X, Pencil, Trash2, AlertTriangle, FileText } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { autorizarFacturaSiigo } from '@/lib/siigo-facturar'
 import { Badge } from '@/components/ui/Badge'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Modal } from '@/components/ui/Modal'
+import { PaginacionBar } from '@/components/ui/PaginacionBar'
 import type { EstadoReserva, Huesped, Operador } from '@/types/database.types'
 
 const PAGE_SIZE = 20
@@ -1160,31 +1161,14 @@ export default function Reservas() {
             ))}
           </div>
 
-          {/* Paginación */}
-          <div className="flex items-center justify-between">
-            <p className="text-body-xs text-blanco-roto/30">
-              {inicio + 1}–{Math.min(inicio + PAGE_SIZE, filtradas.length)} de {filtradas.length}
-            </p>
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => setPagina(p => Math.max(1,p-1))} disabled={pag<=1}
-                className="p-2 rounded-xl border border-white/10 text-blanco-roto/50 hover:text-blanco-roto disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <ChevronLeft size={15}/>
-              </button>
-              {Array.from({length: Math.min(totalPags,5)}, (_,i) => {
-                const num = totalPags<=5 ? i+1 : pag<=3 ? i+1 : pag>=totalPags-2 ? totalPags-4+i : pag-2+i
-                return (
-                  <button key={num} onClick={() => setPagina(num)}
-                    className={`w-8 h-8 rounded-lg text-body-xs font-mono transition-all ${num===pag ? 'bg-dorado text-negro-absoluto font-bold' : 'border border-white/10 text-blanco-roto/50 hover:text-blanco-roto'}`}>
-                    {num}
-                  </button>
-                )
-              })}
-              <button onClick={() => setPagina(p => Math.min(totalPags,p+1))} disabled={pag>=totalPags}
-                className="p-2 rounded-xl border border-white/10 text-blanco-roto/50 hover:text-blanco-roto disabled:opacity-30 disabled:cursor-not-allowed transition-all">
-                <ChevronRight size={15}/>
-              </button>
-            </div>
-          </div>
+          <PaginacionBar
+            pagina={pag}
+            totalPags={totalPags}
+            desde={inicio + 1}
+            hasta={Math.min(inicio + PAGE_SIZE, filtradas.length)}
+            total={filtradas.length}
+            onPagina={setPagina}
+          />
         </>
       )}
 
