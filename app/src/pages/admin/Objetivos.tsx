@@ -13,9 +13,9 @@ import {
   setEstadoObjetivo,
   setEstadoTarea,
   subirAdjunto,
-  urlAdjunto,
 } from '@/lib/trazabilidad'
-import type { EstadoObjetivo, Objetivo, Tarea } from '@/types/database.types'
+import { VisorAdjunto, type AdjuntoVista } from '@/components/objetivos/VisorAdjunto'
+import type { EstadoObjetivo, Objetivo, Tarea, TrazabilidadAdjunto } from '@/types/database.types'
 
 const FILTROS: { id: EstadoObjetivo | 'todas'; label: string }[] = [
   { id: 'todas', label: 'Todas' },
@@ -32,6 +32,7 @@ export default function Objetivos() {
   const [nuevo, setNuevo] = useState(false)
   const [titulo, setTitulo] = useState('')
   const [desc, setDesc] = useState('')
+  const [preview, setPreview] = useState<AdjuntoVista | null>(null)
 
   const { data: objetivos = [], isLoading } = useQuery({
     queryKey: ['objetivos'],
@@ -169,9 +170,12 @@ export default function Objetivos() {
             delay={i * 0.04}
             abierta={abiertoId === o.id}
             onToggle={() => setAbiertoId(abiertoId === o.id ? null : o.id)}
+            onPreview={setPreview}
           />
         ))}
       </div>
+
+      <VisorAdjunto adjunto={preview} onClose={() => setPreview(null)} />
     </div>
   )
 }
@@ -186,12 +190,13 @@ function MiniStat({ label, valor }: { label: string; valor: string | number }) {
 }
 
 function TarjetaObjetivo({
-  objetivo, abierta, onToggle, delay,
+  objetivo, abierta, onToggle, delay, onPreview,
 }: {
   objetivo: Objetivo
   abierta: boolean
   onToggle: () => void
   delay: number
+  onPreview: (a: AdjuntoVista) => void
 }) {
   const { user } = useAuthStore()
   const qc = useQueryClient()
@@ -281,7 +286,7 @@ function TarjetaObjetivo({
 
               <div className="space-y-2">
                 {tareas.map(t => (
-                  <FilaTarea key={t.id} tarea={t} />
+                  <FilaTarea key={t.id} tarea={t} onPreview={onPreview} />
                 ))}
               </div>
 
@@ -302,7 +307,7 @@ function TarjetaObjetivo({
 
               <div className="flex flex-wrap gap-2">
                 {(objetivo.adjuntos ?? []).map(a => (
-                  <AdjuntoChip key={a.id} nombre={a.nombre} path={a.path} />
+                  <AdjuntoChip key={a.id} adjunto={a} onPreview={onPreview} />
                 ))}
                 <button
                   type="button"
@@ -342,7 +347,7 @@ function TarjetaObjetivo({
   )
 }
 
-function FilaTarea({ tarea }: { tarea: Tarea }) {
+function FilaTarea({ tarea, onPreview }: { tarea: Tarea; onPreview: (a: AdjuntoVista) => void }) {
   const { user } = useAuthStore()
   const qc = useQueryClient()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -381,7 +386,7 @@ function FilaTarea({ tarea }: { tarea: Tarea }) {
       </button>
       <div className="pl-8 flex flex-wrap gap-1.5">
         {(tarea.adjuntos ?? []).map(a => (
-          <AdjuntoChip key={a.id} nombre={a.nombre} path={a.path} />
+          <AdjuntoChip key={a.id} adjunto={a} onPreview={onPreview} />
         ))}
         <button
           type="button"
@@ -407,19 +412,26 @@ function FilaTarea({ tarea }: { tarea: Tarea }) {
   )
 }
 
-function AdjuntoChip({ nombre, path }: { nombre: string; path: string }) {
+function AdjuntoChip({
+  adjunto,
+  onPreview,
+}: {
+  adjunto: TrazabilidadAdjunto
+  onPreview: (a: AdjuntoVista) => void
+}) {
   return (
     <button
       type="button"
-      onClick={async () => {
-        const url = await urlAdjunto(path)
-        if (url) window.open(url, '_blank')
-      }}
+      onClick={() => onPreview({
+        nombre: adjunto.nombre,
+        path: adjunto.path,
+        mime: adjunto.mime,
+      })}
       className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-dorado/10 text-dorado text-body-xs"
     >
       <FileText size={12} />
       <Paperclip size={10} />
-      {nombre}
+      {adjunto.nombre}
     </button>
   )
 }
