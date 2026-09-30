@@ -1,5 +1,6 @@
 // Crea usuarios IT BREAK + Administración y carga objetivos cumplidos con PDF.
 import { getSupabaseAdmin } from "../_shared/supabase-admin.ts";
+import { buildBreakPdf, type PdfBlock } from "../_shared/break-pdf.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -44,54 +45,39 @@ Deno.serve(async (req) => {
       .eq("owner_id", it.id)
       .eq("titulo", inf.titulo)
       .maybeSingle();
-    if (existente) {
-      creados.push(inf.titulo + " (ya existía)");
-      continue;
+    let objetivoId = existente?.id as string | undefined;
+    if (!objetivoId) {
+      const { data: obj, error: oErr } = await admin
+        .from("objetivos")
+        .insert({
+          titulo: inf.titulo,
+          descripcion: inf.descripcion,
+          area: "ti",
+          estado: "cumplido",
+          owner_id: it.id,
+          fecha_objetivo: inf.fecha,
+          cumplido_at: `${inf.fecha}T18:00:00-05:00`,
+        })
+        .select("id")
+        .single();
+      if (oErr || !obj) throw new Error(oErr?.message ?? "objetivo");
+      objetivoId = obj.id;
+      for (const [i, t] of inf.tareas.entries()) {
+        await admin.from("tareas").insert({
+          objetivo_id: obj.id,
+          titulo: t,
+          estado: "completa",
+          asignado_id: it.id,
+          created_by: it.id,
+          orden: i,
+          completada_at: `${inf.fecha}T17:00:00-05:00`,
+        });
+      }
     }
 
-    const { data: obj, error: oErr } = await admin
-      .from("objetivos")
-      .insert({
-        titulo: inf.titulo,
-        descripcion: inf.descripcion,
-        area: "ti",
-        estado: "cumplido",
-        owner_id: it.id,
-        fecha_objetivo: inf.fecha,
-        cumplido_at: `${inf.fecha}T18:00:00-05:00`,
-      })
-      .select("id")
-      .single();
-    if (oErr || !obj) throw new Error(oErr?.message ?? "objetivo");
-
-    for (const [i, t] of inf.tareas.entries()) {
-      await admin.from("tareas").insert({
-        objetivo_id: obj.id,
-        titulo: t,
-        estado: "completa",
-        asignado_id: it.id,
-        created_by: it.id,
-        orden: i,
-        completada_at: `${inf.fecha}T17:00:00-05:00`,
-      });
-    }
-
-    const pdf = makePdf(inf.pdfTitulo, inf.pdfCuerpo);
-    const path = `${it.id}/${crypto.randomUUID()}.pdf`;
-    const { error: upErr } = await admin.storage
-      .from("trazabilidad")
-      .upload(path, pdf, { contentType: "application/pdf", upsert: false });
-    if (upErr) throw new Error(upErr.message);
-
-    await admin.from("trazabilidad_adjuntos").insert({
-      objetivo_id: obj.id,
-      nombre: inf.archivo,
-      mime: "application/pdf",
-      path,
-      bytes: pdf.byteLength,
-      subido_por: it.id,
-    });
-    creados.push(inf.titulo);
+    const pdf = buildBreakPdf(inf.bloques);
+    await reemplazarPdf(admin, objetivoId, it.id, inf.archivo, pdf);
+    creados.push(existente ? inf.titulo + " (pdf nuevo)" : inf.titulo);
   }
 
   const { data: objAdm } = await admin
@@ -116,7 +102,8 @@ Deno.serve(async (req) => {
     .select("id")
     .eq("titulo", "Actualización SIRE y TRA")
     .maybeSingle();
-  if (!objSire) {
+  let sireId = objSire?.id as string | undefined;
+  if (!sireId) {
     const { data: sire } = await admin
       .from("objetivos")
       .insert({
@@ -129,6 +116,7 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
+    sireId = sire?.id;
     if (sire) {
       const tareasSire = [
         { titulo: "Cargue SIRE de extranjeros hasta el 23 de septiembre", ok: true },
@@ -148,8 +136,27 @@ Deno.serve(async (req) => {
           completada_at: t.ok ? "2026-09-23T18:00:00-05:00" : null,
         });
       }
-      creados.push("Actualización SIRE y TRA");
     }
+  }
+  if (sireId) {
+    const pdfSire = buildBreakPdf([
+      { kind: "meta", kicker: "SIRE", title: "SIRE y TRA", sub: "Última carga SIRE: 23 de septiembre de 2026  ·  Administración" },
+      { kind: "kpi", items: [
+        { label: "Avance", value: "80%" },
+        { label: "Listas", value: "4/5" },
+        { label: "Corte SIRE", value: "23 sep" },
+      ]},
+      { kind: "section", title: "Qué ya está" },
+      { kind: "li", text: "Cargue SIRE de extranjeros hasta el 23 de septiembre.", strong: true },
+      { kind: "li", text: "Cruce TRA contra reservas del mes." },
+      { kind: "li", text: "Revisión de documentos de llegada." },
+      { kind: "li", text: "Ajustes de inconsistencias SIRE." },
+      { kind: "section", title: "Qué falta" },
+      { kind: "li", text: "Cierre SIRE del 24 de septiembre en adelante.", strong: true },
+      { kind: "p", text: "El tablero queda en 80% hasta que Administración cierre el tramo que sigue." },
+    ]);
+    await reemplazarPdf(admin, sireId, adm.id, "ADM-01-sire-tra.pdf", pdfSire);
+    creados.push("Actualización SIRE y TRA (pdf nuevo)");
   }
 
   return json({
@@ -199,7 +206,45 @@ async function upsertUsuario(
   return { id: created.user.id, email: p.email };
 }
 
-function informesTi() {
+async function reemplazarPdf(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  objetivoId: string,
+  userId: string,
+  archivo: string,
+  pdf: Uint8Array,
+) {
+  const { data: olds } = await admin
+    .from("trazabilidad_adjuntos")
+    .select("id, path")
+    .eq("objetivo_id", objetivoId);
+  const paths = (olds ?? []).map((a: { path: string }) => a.path).filter(Boolean);
+  if (paths.length) await admin.storage.from("trazabilidad").remove(paths);
+  if (olds?.length) {
+    await admin.from("trazabilidad_adjuntos").delete().eq("objetivo_id", objetivoId);
+  }
+  const path = `${userId}/${crypto.randomUUID()}.pdf`;
+  const { error: upErr } = await admin.storage
+    .from("trazabilidad")
+    .upload(path, pdf, { contentType: "application/pdf", upsert: false });
+  if (upErr) throw new Error(upErr.message);
+  await admin.from("trazabilidad_adjuntos").insert({
+    objetivo_id: objetivoId,
+    nombre: archivo,
+    mime: "application/pdf",
+    path,
+    bytes: pdf.byteLength,
+    subido_por: userId,
+  });
+}
+
+function informesTi(): {
+  titulo: string
+  descripcion: string
+  fecha: string
+  tareas: string[]
+  archivo: string
+  bloques: PdfBlock[]
+}[] {
   return [
     {
       titulo: "Mostrador único Break Digital",
@@ -211,13 +256,26 @@ function informesTi() {
         "Mapa de 24 estudios como pantalla de inicio",
       ],
       archivo: "IT-01-mostrador-unico.pdf",
-      pdfTitulo: "IT-01 Mostrador único",
-      pdfCuerpo: [
-        "Hotel Break Boutique, Manizales. Informe IT BREAK.",
-        "La plataforma unifica reservas, huespedes, aseo, finanzas y conversaciones.",
-        "Entrada: administracion.hotelbreakmanizales.com",
-        "Antes: Base_de_Datos.xlsx, Break_1.xlsx, Ventas_2026.xlsx, Aseos.xlsx.",
-        "Ahora el equipo mira el mismo edificio en tiempo real.",
+      bloques: [
+        { kind: "meta", kicker: "IT-01", title: "Mostrador único", sub: "28 de agosto de 2026  ·  IT BREAK  ·  cumplido" },
+        { kind: "kpi", items: [
+          { label: "Avance", value: "100%" },
+          { label: "Área", value: "IT" },
+          { label: "Tareas", value: "3/3" },
+        ]},
+        { kind: "section", title: "Qué se logró" },
+        { kind: "li", text: "Un solo panel para reservas, huéspedes, aseo, finanzas y conversaciones.", strong: true },
+        { kind: "li", text: "Entrada: administracion.hotelbreakmanizales.com" },
+        { kind: "li", text: "El equipo ve el mismo edificio en el celular y en el computador." },
+        { kind: "section", title: "De dónde veníamos" },
+        { kind: "li", text: "Base_de_Datos.xlsx — CRM a mano" },
+        { kind: "li", text: "Break_1.xlsx — una hoja por habitación" },
+        { kind: "li", text: "Ventas_2026.xlsx — ocupación e ingresos" },
+        { kind: "li", text: "Aseos.xlsx — control de limpieza" },
+        { kind: "section", title: "Tareas cerradas" },
+        { kind: "li", text: "PWA admin en el dominio de administración" },
+        { kind: "li", text: "Login del equipo con roles" },
+        { kind: "li", text: "Mapa de 24 estudios como pantalla de inicio" },
       ],
     },
     {
@@ -230,13 +288,24 @@ function informesTi() {
         "Botón Actualizar PxSol en el dashboard",
       ],
       archivo: "IT-02-ocupacion-pxsol.pdf",
-      pdfTitulo: "IT-02 Ocupacion y PxSol",
-      pdfCuerpo: [
-        "El mapa usa v_mapa_habitaciones y el puente PxSol.",
-        "Una reserva para hoy no cuenta como ocupada hasta las 15:00 Colombia.",
-        "Bloqueos de PxSol se ven como habitacion en mantenimiento.",
-        "Gerencia puede preguntar a Hormiga por un numero de habitacion o un huesped.",
-        "IT pregunta lo mismo a Byte, sin mezclar el tablero de empleados.",
+      bloques: [
+        { kind: "meta", kicker: "IT-02", title: "Ocupación y PxSol", sub: "12 de septiembre de 2026  ·  IT BREAK  ·  cumplido" },
+        { kind: "kpi", items: [
+          { label: "Avance", value: "100%" },
+          { label: "Estudios", value: "24" },
+          { label: "Check-in", value: "15:00" },
+        ]},
+        { kind: "section", title: "Regla de oro" },
+        { kind: "p", text: "Una reserva para hoy no pinta la cama ocupada hasta las 15:00 Colombia. Mesa reservada no es mesa ocupada." },
+        { kind: "section", title: "Qué se ve en el mapa" },
+        { kind: "li", text: "Libre — nadie durmió ahí.", strong: true },
+        { kind: "li", text: "Reservada / llega 3pm — vendida, cama vacía." },
+        { kind: "li", text: "Hospedada — ya hizo check-in." },
+        { kind: "li", text: "Bloqueada — fuera de venta (mantenimiento PxSol)." },
+        { kind: "section", title: "Tareas cerradas" },
+        { kind: "li", text: "Sync PxSol de reservas y habitaciones físicas" },
+        { kind: "li", text: "Botón Actualizar PxSol en el Inicio" },
+        { kind: "li", text: "Hormiga y Byte leen el mismo mapa, en ramas distintas" },
       ],
     },
     {
@@ -249,12 +318,22 @@ function informesTi() {
         "Puente a WhatsApp PxSol Conversaciones",
       ],
       archivo: "IT-03-chat-qr.pdf",
-      pdfTitulo: "IT-03 Chat QR",
-      pdfCuerpo: [
-        "El huesped escanea el QR del estudio y habla sin login.",
-        "Recepcion ve el hilo en Conversaciones, con el nombre completo.",
-        "Al final del chat se invita a calificar en Google.",
-        "Los adjuntos viven en storage chat-adjuntos.",
+      bloques: [
+        { kind: "meta", kicker: "IT-03", title: "Chat por QR", sub: "16 de septiembre de 2026  ·  IT BREAK  ·  cumplido" },
+        { kind: "kpi", items: [
+          { label: "Avance", value: "100%" },
+          { label: "Canal", value: "QR" },
+          { label: "WhatsApp", value: "PxSol" },
+        ]},
+        { kind: "section", title: "Para el huésped" },
+        { kind: "li", text: "Escanea el QR del estudio y habla sin login.", strong: true },
+        { kind: "li", text: "Texto, foto o audio." },
+        { kind: "li", text: "Al final se invita a calificar en Google." },
+        { kind: "section", title: "Para el equipo" },
+        { kind: "li", text: "Globo de chat arriba a la derecha — no está en el menú." },
+        { kind: "li", text: "Chats internos: número grande y nombre completo." },
+        { kind: "li", text: "WhatsApp PxSol en el mismo interruptor." },
+        { kind: "li", text: "Botón QRs para imprimir y pegar en cada estudio." },
       ],
     },
     {
@@ -267,11 +346,20 @@ function informesTi() {
         "Valores en pesos completos, sin abreviar",
       ],
       archivo: "IT-04-siigo-compras.pdf",
-      pdfTitulo: "IT-04 Siigo y compras",
-      pdfCuerpo: [
-        "Desde Reservas se autoriza la factura electronica en Siigo.",
-        "Las compras llegan por correo o se suben a mano como ZIP DIAN.",
-        "El modulo Compras lista pendientes, listas y enviadas a Siigo.",
+      bloques: [
+        { kind: "meta", kicker: "IT-04", title: "Siigo y compras DIAN", sub: "23 de septiembre de 2026  ·  IT BREAK  ·  cumplido" },
+        { kind: "kpi", items: [
+          { label: "Avance", value: "100%" },
+          { label: "Factura", value: "Siigo" },
+          { label: "Compras", value: "DIAN" },
+        ]},
+        { kind: "section", title: "Factura de venta" },
+        { kind: "li", text: "No se dispara sola: alguien autoriza en Reservas.", strong: true },
+        { kind: "li", text: "Cédula real o Consumidor Final." },
+        { kind: "li", text: "Montos completos: $1.240.000, nunca 1.2M." },
+        { kind: "section", title: "Compras" },
+        { kind: "li", text: "Llegan por correo o se suben como ZIP DIAN." },
+        { kind: "li", text: "El módulo Compras lista pendientes, listas y enviadas a Siigo." },
       ],
     },
     {
@@ -284,12 +372,21 @@ function informesTi() {
         "Tablero de objetivos, zumbido y asistentes Hormiga/Byte",
       ],
       archivo: "IT-05-pwa-trazabilidad.pdf",
-      pdfTitulo: "IT-05 PWA y trazabilidad",
-      pdfCuerpo: [
-        "El panel es una PWA. Se instala en el celular del equipo.",
-        "Claves del hotel detras de PIN. Usuarios TI y Administracion.",
-        "Cada tarea puede llevar PDF, Word o JPG.",
-        "Gerencia zumbido: vibra el celular del empleado si la app esta abierta.",
+      bloques: [
+        { kind: "meta", kicker: "IT-05", title: "PWA y trazabilidad", sub: "28 de septiembre de 2026  ·  IT BREAK  ·  cumplido" },
+        { kind: "kpi", items: [
+          { label: "Avance", value: "100%" },
+          { label: "PIN claves", value: "2571" },
+          { label: "IA", value: "2 ramas" },
+        ]},
+        { kind: "section", title: "App del equipo" },
+        { kind: "li", text: "PWA instalable en el celular.", strong: true },
+        { kind: "li", text: "Claves del hotel detrás del PIN 2571." },
+        { kind: "li", text: "Usuarios IT BREAK y Administración, mismo panel gerencial por ahora." },
+        { kind: "section", title: "Tablero" },
+        { kind: "li", text: "Cada objetivo y cada tarea pueden llevar PDF, Word o JPG." },
+        { kind: "li", text: "Gerencia abre el archivo ahí mismo, sin descargar." },
+        { kind: "li", text: "Zumbido: vibra el celular del empleado si tiene el panel abierto." },
       ],
     },
     {
@@ -302,94 +399,28 @@ function informesTi() {
         "Dejar el PDF para leerlo en el celular, sin descargar",
       ],
       archivo: "Carta-gerente-panorama.pdf",
-      pdfTitulo: "Oye, te dejo el panorama",
-      pdfCuerpo: [
-        "Parce, esto va corto y sin humo. No es un manual. Es para que sepas que ya tienes en la casa y para que no te toque perseguir a nadie por WhatsApp.",
-        "",
-        "Break Digital ya no es un prototipo. Es el mostrador del hotel. Los cuatro Excel (huespedes, reservas por habitacion, ventas del ano y aseos) cumplieron. Si recepcion actualizaba uno y aseo miraba otro, la casa no tenia una sola verdad. Ahora todos miran el mismo edificio, en el computador o en el celular.",
-        "",
-        "Entras a administracion.hotelbreakmanizales.com y caes en el Inicio. Ahi estan las 24 habitaciones. Lo mas importante: una reserva para hoy NO pinta la cama ocupada hasta las 3 de la tarde. Es como el restaurante: mesa reservada no es mesa ocupada. Si no, aseo limpia a ciegas y el porcentaje del dia miente.",
-        "",
-        "Desde ese mapa tocas un numero y ves estado, huesped y chat. Reservas, gente, aseo, lavanderia, finanzas, compras y marketing estan en el menu. Los chats no: el globo de arriba a la derecha, al lado de tu inicial. Ahi estan el QR de cada estudio y el WhatsApp de PxSol. El huesped escanea, habla (texto, foto o audio) y al final puede calificar en Google.",
-        "",
-        "La factura no se dispara sola. Alguien en Reservas le da el si a Siigo. Las compras DIAN tambien entran por el panel. Las claves del hotel (wifi, camaras, cuentas) viven detras del PIN. Los montos se ven completos, no 1.2M.",
-        "",
-        "IT y Administracion ya tienen usuario propio. Por ahora ven todo lo gerencial, hasta que tu recortes funciones. Ellos suben objetivos y tareas con PDF. Tu los abres en Objetivos, ahi mismo, sin bajarlos.",
-        "",
-        "Tienes a Hormiga: te cuenta como va el equipo, el tablero y PxSol (huespedes, habitaciones, estados). IT tiene a Byte, otra conversacion, solo tecnica de PxSol, para no mezclar ramas. Si necesitas a alguien ya, le mandas un zumbido y le vibra el celular si tiene el panel abierto.",
-        "",
-        "En corto: una sola verdad, ocupacion honesta, el huesped habla por QR, y tu ves que hizo IT sin perseguir pantallazos. Lo que falta es que gerencia diga que ve cada cargo. El resto ya esta en la casa.",
+      bloques: [
+        { kind: "meta", kicker: "Carta", title: "El panorama de la casa", sub: "28 de septiembre de 2026  ·  para gerencia" },
+        { kind: "kpi", items: [
+          { label: "Estudios", value: "24" },
+          { label: "Excel", value: "0" },
+          { label: "Panel", value: "1" },
+        ]},
+        { kind: "p", text: "Parce, esto va corto y sin humo. No es un manual. Es para que sepas qué ya tienes en la casa." },
+        { kind: "section", title: "En una frase" },
+        { kind: "p", text: "Break Digital es el mostrador único. Los cuatro Excel cumplieron. Ahora todos miran el mismo edificio." },
+        { kind: "section", title: "Cómo se usa" },
+        { kind: "li", text: "Entras a administracion.hotelbreakmanizales.com y caes en el Inicio.", strong: true },
+        { kind: "li", text: "Tocas un número: estado, huésped y chat de ese estudio." },
+        { kind: "li", text: "Los chats están en el globo de arriba a la derecha, no en el menú." },
+        { kind: "li", text: "Ocupada de verdad solo después de las 15:00." },
+        { kind: "section", title: "Lo que ya vive" },
+        { kind: "li", text: "Reservas, huéspedes, aseo, lavandería, finanzas, compras, marketing." },
+        { kind: "li", text: "Factura Siigo con autorización humana. Claves detrás del PIN." },
+        { kind: "li", text: "IT y Administración con usuario propio. Hormiga para ti, Byte para IT." },
+        { kind: "section", title: "Lo que falta" },
+        { kind: "li", text: "Que gerencia recorte qué ve cada cargo. El resto ya está en la casa.", strong: true },
       ],
     },
   ];
-}
-
-function wrapLine(s: string, max = 86): string[] {
-  if (!s) return [""];
-  const words = s.split(/\s+/);
-  const out: string[] = [];
-  let cur = "";
-  for (const w of words) {
-    const next = cur ? `${cur} ${w}` : w;
-    if (next.length > max) {
-      if (cur) out.push(cur);
-      cur = w;
-    } else cur = next;
-  }
-  if (cur) out.push(cur);
-  return out;
-}
-
-function makePdf(title: string, lines: string[]): Uint8Array {
-  const safe = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  const wrapped = lines.flatMap(l => wrapLine(l, 86));
-  const perPage = 34;
-  const pages: string[][] = [];
-  for (let i = 0; i < wrapped.length; i += perPage) pages.push(wrapped.slice(i, i + perPage));
-  if (pages.length === 0) pages.push([]);
-
-  const pageIds: number[] = [];
-  const contentIds: number[] = [];
-  const objects: string[] = new Array(2 + pages.length * 2 + 1);
-  objects[0] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj";
-  for (let i = 0; i < pages.length; i++) {
-    pageIds.push(3 + i);
-    contentIds.push(3 + pages.length + i);
-  }
-  const fontId = 3 + pages.length * 2;
-  const kids = pageIds.map(id => `${id} 0 R`).join(" ");
-  objects[1] = `2 0 obj << /Type /Pages /Kids [${kids}] /Count ${pages.length} >> endobj`;
-
-  for (let i = 0; i < pages.length; i++) {
-    objects[pageIds[i] - 1] =
-      `${pageIds[i]} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentIds[i]} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >> endobj`;
-    const content: string[] = ["BT", "/F1 14 Tf", "48 760 Td"];
-    if (i === 0) {
-      content.push(`(${safe(title)}) Tj`, "/F1 10 Tf", "0 -22 Td", "(Break Hotel Boutique · para gerencia · 2026) Tj", "0 -20 Td");
-    } else {
-      content.push("/F1 10 Tf", `(${safe(title)} · ${i + 1}) Tj`, "0 -22 Td");
-    }
-    for (const line of pages[i]) {
-      content.push(`(${safe(line)}) Tj`, "0 -16 Td");
-    }
-    content.push("ET");
-    const stream = content.join("\n");
-    objects[contentIds[i] - 1] = `${contentIds[i]} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`;
-  }
-  objects[fontId - 1] = `${fontId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj`;
-
-  let body = "%PDF-1.4\n";
-  const offsets = [0];
-  for (const obj of objects) {
-    offsets.push(body.length);
-    body += obj + "\n";
-  }
-  const xrefPos = body.length;
-  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i <= objects.length; i++) {
-    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  body += xref;
-  body += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF`;
-  return new TextEncoder().encode(body);
 }

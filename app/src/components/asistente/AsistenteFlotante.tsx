@@ -175,16 +175,7 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
                   </p>
                 )}
                 {historial.map(m => (
-                  <div
-                    key={m.id}
-                    className={`max-w-[90%] rounded-2xl px-3.5 py-2.5 text-body-sm leading-relaxed whitespace-pre-wrap ${
-                      m.rol === 'user'
-                        ? 'ml-auto bg-dorado/15 text-blanco-roto'
-                        : 'bg-white/[0.04] text-blanco-roto/85'
-                    }`}
-                  >
-                    {m.contenido}
-                  </div>
+                  <BurbujaMensaje key={m.id} rol={m.rol} texto={m.contenido} />
                 ))}
                 {pendiente && (
                   <div className="max-w-[90%] ml-auto rounded-2xl px-3.5 py-2.5 text-body-sm bg-dorado/15 text-blanco-roto">
@@ -236,5 +227,48 @@ function Panel({ rama }: { rama: 'gerente' | 'ti' }) {
 
       <VisorAdjunto adjunto={preview} onClose={() => setPreview(null)} />
     </>
+  )
+}
+
+function BurbujaMensaje({ rol, texto }: { rol: string; texto: string }) {
+  const esUser = rol === 'user'
+  const lineas = texto.replace(/\r/g, '').split(/\n+/).map(l => l.trim()).filter(Boolean)
+
+  if (esUser) {
+    return (
+      <div className="max-w-[90%] ml-auto rounded-2xl px-3.5 py-2.5 text-body-sm leading-relaxed bg-dorado/15 text-blanco-roto">
+        {texto}
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-[90%] rounded-2xl px-3.5 py-3 text-body-sm bg-white/[0.04] text-blanco-roto/90 space-y-2">
+      {lineas.map((linea, i) => {
+        const titulo = /:$/.test(linea) && !linea.startsWith('•')
+        const vineta = /^[•\-\*]\s+/.test(linea)
+        const cuerpo = linea.replace(/^[•\-\*]\s+/, '')
+        if (titulo) {
+          return (
+            <p key={i} className="font-semibold text-dorado pt-1 first:pt-0">
+              {linea}
+            </p>
+          )
+        }
+        if (vineta) {
+          return (
+            <p key={i} className="flex gap-2 leading-snug">
+              <span className="text-dorado shrink-0 font-semibold">•</span>
+              <span>{cuerpo}</span>
+            </p>
+          )
+        }
+        return (
+          <p key={i} className={i === 0 ? 'font-medium text-blanco-roto' : 'leading-snug'}>
+            {linea}
+          </p>
+        )
+      })}
+    </div>
   )
 }

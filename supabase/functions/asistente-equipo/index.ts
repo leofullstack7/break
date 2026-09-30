@@ -1,5 +1,6 @@
 // Hormiga (gerencia) y Byte (IT). Ramas separadas.
 import { getSupabaseAdmin } from "../_shared/supabase-admin.ts";
+import { buildBreakPdf, type PdfBlock } from "../_shared/break-pdf.ts";
 import {
   listBookingsDetailed,
   listHotelPhysicalRooms,
@@ -61,16 +62,20 @@ Deno.serve(async (req) => {
   const quierePdf = pidePdf(mensaje);
   let pdf: { nombre: string; path: string; mime: string } | undefined;
 
+  let pdfError = "";
   if (quierePdf && rama === "gerente") {
     try {
       pdf = await generarInformePdf(admin, user.id, mensaje, ctx);
     } catch (e) {
+      pdfError = e instanceof Error ? e.message : "No pude armar el PDF.";
       console.error("pdf hormiga", e);
     }
   }
 
   let respuesta = await conLlm(rama, mensaje, ctx, !!pdf);
   if (!respuesta) respuesta = responderLocal(rama, mensaje, ctx, !!pdf);
+  if (pdfError) respuesta += `\n\n• El PDF no salió: ${pdfError}`
+  respuesta = formatearMensaje(respuesta);
 
   await admin.from("asistente_mensajes").insert({
     rama,
@@ -239,7 +244,7 @@ async function armarContexto(
 
 function pidePdf(pregunta: string) {
   const q = norm(pregunta);
-  return /\b(pdf|informe|resumen|reporte|exporta|bajame|armame|arma un)\b/.test(q);
+  return /\b(pdf|informe|resumen|reporte|exporta|bajame|armame|arma(me)? un|genera(me)?|hazme)\b/.test(q);
 }
 
 function extraerRango(pregunta: string): { desde: string; hasta: string; label: string } {
@@ -288,8 +293,13 @@ async function conLlm(
   const key = Deno.env.get("OPENAI_API_KEY");
   if (!key) return null;
   const sistema = rama === "gerente"
-    ? `Eres Hormiga, la asistente de gerencia del Hotel Break en Manizales. Hablas como un parce de confianza: cálida, cercana, colombiana, sin grosería pesada. Tú y el gerente se tratan de "tú". Das datos precisos (números, fechas, nombres) que SÍ estén en el contexto. Si no está, lo dices. No inventes ocupación ni avances. Frases cortas. Máximo 8 líneas. ${conPdf ? "Al final menciona que ya le dejaste el PDF listo para abrir en el chat, sin descargar." : ""}`
-    : `Eres Byte, asistente de IT Break. Cercano pero técnico. Solo PxSol, habitaciones, huéspedes y estados. No hables de rendimiento ni zumbidos. No inventes datos.`;
+    ? `Eres Hormiga, asistente de gerencia del Hotel Break (Manizales). Hablas como un parce de confianza: cercana, colombiana, de tú. Datos precisos del contexto. Si no está, lo dices. NUNCA un párrafo corrido. Formato OBLIGATORIO:
+1) Una línea de saludo corta.
+2) Línea en blanco.
+3) Cada idea en su propia viñeta que empiece con "• ".
+4) Si hay un título de bloque, una línea sola que termine en ":" (ejemplo: Equipo:).
+Máximo 10 viñetas. ${conPdf ? "Cierra con una viñeta: el PDF ya está listo para abrir en el chat." : ""}`
+    : `Eres Byte, IT Break. Cercano y técnico. Solo PxSol y ocupación. Cada idea en una viñeta "• ". Nunca un párrafo corrido.`;
 
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -314,45 +324,76 @@ async function conLlm(
   return jsonBody.choices?.[0]?.message?.content ?? null;
 }
 
+function formatearMensaje(texto: string): string {
+  const raw = texto.replace(/\r/g, "").trim();
+  const partes = raw.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const linea of partes) {
+    if (/^[•\-\*]\s+/.test(linea) || /:$/.test(linea) || out.length === 0) {
+      out.push(linea.replace(/^[\-\*]\s+/, "• "));
+      continue;
+    }
+    if (linea.length < 90 && !linea.includes(". ")) {
+      out.push(linea.startsWith("• ") ? linea : `• ${linea}`);
+      continue;
+    }
+    for (const frase of linea.split(/(?<=[.!?])\s+/)) {
+      const f = frase.trim();
+      if (!f) continue;
+      out.push(f.startsWith("• ") ? f : `• ${f}`);
+    }
+  }
+  return out.join("\n\n");
+}
+
 function responderLocal(rama: string, pregunta: string, ctx: Ctx, conPdf: boolean): string {
   const q = norm(pregunta);
   const nombre = ctx.nombreGerente;
-  const pie = conPdf ? "\n\nTe dejé el PDF abajito, ábrelo ahí mismo." : "";
+  const pie = conPdf ? "• El PDF ya está listo. Ábrelo aquí mismo, sin bajarlo." : "";
+  const objs = ctx.objetivos.split("\n").filter(Boolean).slice(0, 6).map(l => `• ${l}`);
 
-  if (rama === "gerente" && (q.includes("rendim") || q.includes("equipo") || q.includes("como van") || q.includes("cómo van"))) {
-    return `Parce ${nombre}, así va la casa:\n${ctx.rendimiento || "Aún no hay tareas asignadas."}\n\n${resumenCorto(ctx)}${pie}`;
+  if (rama === "gerente" && (q.includes("rendim") || q.includes("equipo") || q.includes("como van"))) {
+    return [`Listo ${nombre}, así va el equipo:`, "", ...ctx.rendimiento.split("\n").filter(Boolean).map(l => `• ${l}`), "", ...objs, pie].filter(Boolean).join("\n");
   }
   if (rama === "gerente" && (q.includes("objetivo") || q.includes("tablero") || q.includes("avance") || q.includes("sire") || q.includes("tra"))) {
-    return `Mira, te lo dejo claro:\n${ctx.objetivos || "Todavía no hay objetivos en el tablero."}${pie}`;
+    return [`Te lo dejo por puntos:`, "", ...objs, pie].filter(Boolean).join("\n");
   }
 
   const num = pregunta.match(/\b([1-4]\d{2})\b/);
   if (num && ctx.mapa.includes(num[1])) {
     const linea = ctx.mapa.split("\n").find(l => l.startsWith(num[1])) ?? "";
     return linea
-      ? `La ${num[1]} está así: ${linea}.`
-      : `No la vi en el mapa de hoy, ${nombre}.`;
+      ? `La ${num[1]}:\n\n• ${linea}`
+      : `• No vi la ${num[1]} en el mapa de hoy.`;
   }
 
   if (q.includes("ocup") || q.includes("mapa") || q.includes("habitacion")) {
-    return `Hoy, sin mentiras: ${ctx.ocupadas} ocupadas de 24. ${ctx.bloqueadas} bloqueadas.\n${ctx.mapa.split("\n").slice(1, 6).join("\n")}${pie}`;
+    return [
+      `Hoy, sin mentiras:`,
+      "",
+      `• ${ctx.ocupadas} ocupadas de 24 (ya hicieron check-in).`,
+      `• ${ctx.bloqueadas} bloqueadas.`,
+      ...ctx.mapa.split("\n").slice(1, 5).map(l => `• ${l}`),
+      pie,
+    ].filter(Boolean).join("\n");
   }
   if (q.includes("informe") || q.includes("resumen") || q.includes("pdf")) {
-    return `Te resumo lo que hay en el tablero:\n${resumenCorto(ctx)}${pie}`;
+    return [`Resumen del tablero:`, "", ...objs, pie].filter(Boolean).join("\n");
   }
   if (q.includes("pxsol") || q.includes("reserva") || q.includes("huesped")) {
-    return (ctx.pxsol || ctx.mapa).slice(0, 700) + pie;
+    return (ctx.pxsol || ctx.mapa).split("\n").filter(Boolean).slice(0, 8).map(l => `• ${l}`).join("\n");
   }
 
   if (rama === "ti") {
-    return `Byte al habla. Mapa: ${ctx.mapa.split("\n")[0]}\n${(ctx.pxsol || "PxSol no mandó payload ahora; uso el mapa interno.").slice(0, 500)}`;
+    return [`Byte al habla.`, "", `• ${ctx.mapa.split("\n")[0]}`, `• ${(ctx.pxsol || "PxSol no mandó payload; uso el mapa interno.").slice(0, 220)}`].join("\n");
   }
-  return `Dime con más detalle, ${nombre}. Puedo hablarte del mapa, de un número de habitación, de cómo va IT o Administración, o armarte un PDF de un mes.${pie}`;
-}
-
-function resumenCorto(ctx: Ctx): string {
-  const lineas = ctx.objetivos.split("\n").filter(Boolean).slice(0, 6);
-  return lineas.join("\n") || "Sin objetivos cargados.";
+  return [
+    `Dime más fino, ${nombre}.`,
+    "",
+    "• Puedo hablarte del mapa o de un número de habitación.",
+    "• De cómo va IT o Administración.",
+    "• O armarte un PDF de un mes (ejemplo: PDF de septiembre).",
+  ].join("\n");
 }
 
 async function generarInformePdf(
@@ -362,40 +403,78 @@ async function generarInformePdf(
   ctx: Ctx,
 ): Promise<{ nombre: string; path: string; mime: string }> {
   const rango = extraerRango(pregunta);
-  const objs = ctx.recortes.filter(o =>
+  const delMes = ctx.recortes.filter(o =>
     enRango(o.fecha_objetivo, rango.desde, rango.hasta) ||
     enRango(o.cumplido_at, rango.desde, rango.hasta) ||
-    enRango(o.created_at, rango.desde, rango.hasta) ||
-    (rango.label.includes("2026") && rango.desde <= "2026-01-01"),
+    enRango(o.created_at, rango.desde, rango.hasta),
   );
-  const lista = objs.length ? objs : ctx.recortes.slice(0, 8);
-  const ads = ctx.adjuntos.filter(a => enRango(a.created_at, rango.desde, rango.hasta));
+  const lista = delMes.length ? delMes : ctx.recortes;
+  const ads = ctx.adjuntos.filter(a =>
+    enRango(a.created_at, rango.desde, rango.hasta) || !delMes.length,
+  );
 
-  const lineas: string[] = [
-    `Periodo: ${rango.label} (${rango.desde} a ${rango.hasta})`,
-    `Ocupacion de hoy: ${ctx.ocupadas}/24 reales. ${ctx.bloqueadas} bloqueadas.`,
-    "",
-    "Avance del equipo",
-    ctx.rendimiento || "Sin tareas asignadas.",
-    "",
-    "Objetivos y avances",
+  const bloques: PdfBlock[] = [
+    {
+      kind: "meta",
+      kicker: "Hormiga",
+      title: `Resumen ${rango.label}`,
+      sub: `${rango.desde} a ${rango.hasta}  ·  generado para gerencia`,
+    },
+    { kind: "section", title: "Hoy en el hotel" },
+    {
+      kind: "kpi",
+      items: [
+        { label: "Ocupadas reales", value: `${ctx.ocupadas}/24` },
+        { label: "Bloqueadas", value: String(ctx.bloqueadas) },
+        { label: "Objetivos en el corte", value: String(lista.length) },
+      ],
+    },
   ];
+  const mapaLineas = ctx.mapa.split("\n").filter(Boolean).slice(1, 7);
+  if (mapaLineas.length) {
+    bloques.push({ kind: "section", title: "Mapa de hoy" });
+    for (const linea of mapaLineas) bloques.push({ kind: "li", text: linea });
+  }
+  bloques.push({ kind: "section", title: "Equipo" });
+  for (const linea of ctx.rendimiento.split("\n").filter(Boolean)) {
+    bloques.push({ kind: "li", text: linea, strong: true });
+  }
+  if (!ctx.rendimiento) bloques.push({ kind: "p", text: "Todavía no hay tareas asignadas al equipo." });
+
+  bloques.push({ kind: "section", title: delMes.length ? `Avances de ${rango.label}` : "Avances del tablero" });
+  if (!delMes.length) {
+    bloques.push({
+      kind: "p",
+      text: `No encontré recortes solo de ${rango.label}. Te dejo el panorama completo del tablero.`,
+    });
+  }
   for (const o of lista) {
     const ts = ctx.tareas.filter(t => t.objetivo_id === o.id);
     const ok = ts.filter(t => t.estado === "completa").length;
     const pct = ts.length ? Math.round((ok / ts.length) * 100) : (o.estado === "cumplido" ? 100 : 0);
-    lineas.push(`- ${o.titulo}  ${pct}%  (${o.estado})`);
-    if (o.descripcion) lineas.push(`  ${o.descripcion}`);
-    for (const t of ts.slice(0, 4)) {
-      lineas.push(`    [${t.estado === "completa" ? "x" : " "}] ${t.titulo}`);
+    bloques.push({
+      kind: "li",
+      text: `${o.titulo}  —  ${pct}%  (${labelEstado(o.estado)})`,
+      strong: true,
+    });
+    if (o.descripcion) bloques.push({ kind: "p", text: o.descripcion });
+    for (const t of ts.slice(0, 5)) {
+      bloques.push({
+        kind: "li",
+        text: `${t.estado === "completa" ? "Listo" : "Pendiente"}: ${t.titulo}`,
+      });
     }
   }
+
   if (ads.length) {
-    lineas.push("", "Informes que ya subio el equipo");
-    for (const a of ads.slice(0, 10)) lineas.push(`- ${a.created_at.slice(0, 10)}  ${a.nombre}`);
+    bloques.push({ kind: "section", title: "Informes que ya subió el equipo" });
+    for (const a of ads.slice(0, 10)) {
+      bloques.push({ kind: "li", text: `${a.created_at.slice(0, 10)}  ·  ${a.nombre}` });
+    }
   }
 
-  const pdf = makeInformeElegante(`Resumen ${rango.label}`, lineas);
+  const pdf = buildBreakPdf(bloques);
+  if (pdf.byteLength < 800) throw new Error("El PDF salió vacío.");
   const nombre = `Hormiga-${rango.desde}-resumen.pdf`;
   const path = `${userId}/${crypto.randomUUID()}.pdf`;
 
@@ -433,81 +512,10 @@ async function generarInformePdf(
   return { nombre, path, mime: "application/pdf" };
 }
 
-function wrapLine(s: string, max = 86): string[] {
-  if (!s) return [""];
-  const words = s.split(/\s+/);
-  const out: string[] = [];
-  let cur = "";
-  for (const w of words) {
-    const next = cur ? `${cur} ${w}` : w;
-    if (next.length > max) {
-      if (cur) out.push(cur);
-      cur = w;
-    } else cur = next;
-  }
-  if (cur) out.push(cur);
-  return out;
+function labelEstado(estado: string) {
+  if (estado === "cumplido") return "cumplido";
+  if (estado === "en_curso") return "en curso";
+  if (estado === "abierto") return "abierto";
+  return estado;
 }
 
-function makeInformeElegante(title: string, lines: string[]): Uint8Array {
-  const safe = (s: string) => s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  const wrapped = lines.flatMap(l => wrapLine(l, 88));
-  const perPage = 32;
-  const pages: string[][] = [];
-  for (let i = 0; i < wrapped.length; i += perPage) pages.push(wrapped.slice(i, i + perPage));
-  if (!pages.length) pages.push([]);
-
-  const pageIds = pages.map((_, i) => 3 + i);
-  const contentIds = pages.map((_, i) => 3 + pages.length + i);
-  const fontId = 3 + pages.length * 2;
-  const objects: string[] = new Array(2 + pages.length * 2 + 1);
-  objects[0] = "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj";
-  objects[1] = `2 0 obj << /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(" ")}] /Count ${pages.length} >> endobj`;
-
-  for (let i = 0; i < pages.length; i++) {
-    objects[pageIds[i] - 1] =
-      `${pageIds[i]} 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentIds[i]} 0 R /Resources << /Font << /F1 ${fontId} 0 R >> >> >> endobj`;
-    const ops: string[] = [
-      "0.79 0.64 0.16 rg",
-      "36 742 540 28 re f",
-      "0.05 0.05 0.05 rg",
-      "36 40 540 1.2 re f",
-      "BT",
-      "/F1 16 Tf",
-      "1 1 1 rg",
-      "50 750 Td",
-      "(BREAK) Tj",
-      "0.05 0.05 0.05 rg",
-      "/F1 13 Tf",
-      "50 710 Td",
-      `(${safe(title)}) Tj`,
-      "/F1 9 Tf",
-      "0 -16 Td",
-      "(Hotel Break Boutique  ·  Manizales  ·  Hormiga) Tj",
-      "0 -22 Td",
-    ];
-    for (const line of pages[i]) {
-      ops.push(`(${safe(line)}) Tj`, "0 -15 Td");
-    }
-    ops.push("ET");
-    const stream = ops.join("\n");
-    objects[contentIds[i] - 1] =
-      `${contentIds[i]} 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`;
-  }
-  objects[fontId - 1] = `${fontId} 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj`;
-
-  let body = "%PDF-1.4\n";
-  const offsets = [0];
-  for (const obj of objects) {
-    offsets.push(body.length);
-    body += obj + "\n";
-  }
-  const xrefPos = body.length;
-  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  for (let i = 1; i <= objects.length; i++) {
-    xref += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
-  }
-  body += xref;
-  body += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefPos}\n%%EOF`;
-  return new TextEncoder().encode(body);
-}
